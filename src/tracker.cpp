@@ -250,6 +250,7 @@ void RobotTracker::update(const FrameObservations& frame) {
         return;
     }
 
+    match_dt_scale_ = std::clamp((frame.stamp - stamp_) / 0.04, 1.0, 3.0);
     predictTo(frame.stamp);
 
     // Associate every same-id observation with one of the N predicted armors.
@@ -268,8 +269,8 @@ void RobotTracker::update(const FrameObservations& frame) {
             const cv::Vec3d pa = armorPosition(x_, k);
             const cv::Vec3d dp = o.position - pa;
             const double dyaw = std::abs(wrapAngle(o.yaw - armorYaw(x_, k)));
-            if (cv::norm(dp) > cfg_.max_match_distance * std::max(1.0, o.distance / 3.0) ||
-                dyaw > cfg_.max_match_yaw_diff)
+            if (cv::norm(dp) > match_dt_scale_ * cfg_.max_match_distance * std::max(1.0, o.distance / 3.0) ||
+                dyaw > match_dt_scale_ * cfg_.max_match_yaw_diff)
                 continue;
             // position-only Mahalanobis distance
             const double phi = armorYaw(x_, k), r = armorRadius(x_, k);

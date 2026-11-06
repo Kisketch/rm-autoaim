@@ -91,6 +91,9 @@ private:
     int unmatched_with_target_ = 0;
     double nis_ema_ = 3.0;
     double q_scale_ = 1.0;
+    // Gate widening when frames are far apart (dropped frames, lower fps):
+    // gates are tuned for 40 ms, a 120 ms gap needs ~3x the radius.
+    double match_dt_scale_ = 1.0;
 };
 
 class PointTracker {
