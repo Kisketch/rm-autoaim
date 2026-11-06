@@ -53,6 +53,10 @@ Config Config::load(const std::string& path) {
     get(d, "enemy_color", color);
     c.detector.enemy_color = (color == "blue") ? Color::BLUE : Color::RED;
     get(d, "channel_diff_threshold", c.detector.channel_diff_threshold);
+    { int v = 0; get(d, "channel_diff_adaptive", v); c.detector.channel_diff_adaptive = v != 0; }
+    get(d, "channel_diff_k", c.detector.channel_diff_k);
+    get(d, "channel_diff_min", c.detector.channel_diff_min);
+    get(d, "channel_diff_max", c.detector.channel_diff_max);
     get(d, "min_light_length", c.detector.min_light_length);
     get(d, "min_light_aspect", c.detector.min_light_aspect);
     get(d, "max_light_aspect", c.detector.max_light_aspect);
@@ -159,6 +163,10 @@ bool setParam(Config& c, const std::string& key, double v) {
     else if (key == "optimize_yaw") c.pose.optimize_yaw = v != 0;
     else if (key == "yaw_gain") c.pose.yaw_gain = v;
     else if (key == "refine_corners") c.detector.refine_corners = v != 0;
+    else if (key == "diff_adaptive") c.detector.channel_diff_adaptive = v != 0;
+    else if (key == "diff_k") c.detector.channel_diff_k = v;
+    else if (key == "diff_min") c.detector.channel_diff_min = v;
+    else if (key == "diff_max") c.detector.channel_diff_max = v;
     else if (key == "use_drag") c.ballistic.use_drag = v != 0;
     else return false;
     return true;

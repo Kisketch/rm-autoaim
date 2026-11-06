@@ -22,6 +22,12 @@ struct CameraConfig {
 struct DetectorConfig {
     Color enemy_color = Color::RED;
     int channel_diff_threshold = 70;  // R-B (red) / B-R (blue) binarisation threshold
+    // Adaptive variant: thr = clamp(mean + k*std, min, max) computed per frame.
+    // Fixes the collapse under dim light measured in docs/exposure_robustness.md.
+    bool channel_diff_adaptive = false;
+    double channel_diff_k = 4.5;
+    double channel_diff_min = 40.0;
+    double channel_diff_max = 120.0;
     // light bar filters
     float min_light_length = 8.f;
     float min_light_aspect = 1.6f, max_light_aspect = 12.f;
