@@ -51,43 +51,24 @@ for ($n = 0; $n -lt $MaxTasks; $n++) {
         $branch = "auto/$($task.id)-$ts"
         git checkout -q -b $branch
 
-        $prompt = @"
-你是这个仓库的改进代理。约束：
-- 只改当前仓库；不要动 C:\Users\Lgnatius\Desktop\RM\template、RM-PRO 以及其它仓库。
-- 先读 README / BASELINE / docs，再动手；结论必须来自真实运行，不许估算冒充实测。
-- 做完必须跑 `python tools/regression.py`，必须全 PASS；不 PASS 就想办法修到 PASS，修不到就保留现状并在报告里写清楚。
-- 只改与本任务相关的文件；不要顺便重构。
-- 结束时用 3-6 行说明：改了什么、实测数字、剩下什么。
-
-任务：
-$($task.prompt)
-"@
-
-        Log "  启动 opencode run（超时 $TaskMinutes 分钟）"
-        $job = Start-Job -ScriptBlock {
-            param($r, $t, $p)
-            Set-Location $r
-            & opencode run --dir $r --auto --title $t $p 2>&1
-        } -ArgumentList $Repo, "[auto] $($task.id) $($task.title)", $prompt
-
-        $done = Wait-Job $job -Timeout ($TaskMinutes * 60)
-        if (-not $done) {
-            Stop-Job $job
-            Log "  超时，终止本次任务"
-            $out = ""
-            $ok = $false
-        } else {
-            $out = Receive-Job $job
-            $ok = $true
+        $scriptRel = $task.script
+        if (-not $scriptRel) {
+            Log "  该任务还没有可执行脚本（tools/tasks/<id>_*.py），跳过"
+            $task.status = "blocked"
+            $data.tasks | Where-Object { $_.id -eq $task.id } | ForEach-Object { $_.status = $task.status }
+            $data | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $Queue -Encoding UTF8
+            continue
         }
-        Remove-Job $job -Force
 
-        $tail = ($out | Select-Object -Last 25) -join "`n"
-        Log "  代理输出尾部：`n$tail"
+        Log "  执行 py $scriptRel"
+        $out = & py $scriptRel 2>&1
+        $ok = ($LASTEXITCODE -eq 0)
+        $tail = ($out | Select-Object -Last 20) -join "`n"
+        Log "  脚本输出尾部：`n$tail"
 
         Log "  跑门禁"
-        $gateOut = & python tools/regression.py 2>&1
-        $gateOk = ($LASTEXITCODE -eq 0) -and ($ok -eq $true)
+        $gateOut = & py tools/regression.py 2>&1
+        $gateOk = ($LASTEXITCODE -eq 0) -and $ok
         Log ("  门禁 " + $(if ($gateOk) { "PASS" } else { "FAIL" }))
 
         if ($gateOk) {
