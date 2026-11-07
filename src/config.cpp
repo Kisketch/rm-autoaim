@@ -147,6 +147,8 @@ bool setParam(Config& c, const std::string& key, double v) {
     else if (key == "q_adapt_max") c.tracker.q_adapt_max = v;
     else if (key == "nis_alpha") c.tracker.nis_ema_alpha = v;
     else if (key == "singer_tau") c.tracker.singer_tau = v;
+    else if (key == "channel_diff_threshold") c.detector.channel_diff_threshold = static_cast<int>(std::lround(v));
+    else if (key == "diff_adaptive") c.detector.channel_diff_adaptive = v != 0;
     else if (key == "ca_model") c.tracker.ca_model = v != 0;
     else if (key == "q_acc") c.tracker.q_acc = v;
     else if (key == "max_match_distance") c.tracker.max_match_distance = v;
