@@ -44,8 +44,8 @@ for ($n = 0; $n -lt $MaxTasks; $n++) {
 
     Push-Location $Repo
     try {
-        $dirty = git status --porcelain
-        if ($dirty) { Log "工作区不干净，跳过（先提交或还原）"; break }
+        $dirty = git status --porcelain | Where-Object { $_ -match '^[ MARC][MD]' }
+        if ($dirty) { Log "工作区有未提交的修改，跳过（先提交或还原）"; break }
 
         $ts = Get-Date -Format "MMdd-HHmm"
         $branch = "auto/$($task.id)-$ts"
