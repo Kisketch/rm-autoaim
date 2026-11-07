@@ -21,9 +21,11 @@ KNOBS = ["q_yaw", "q_r", "singer_tau", "max_fire_facing",
 
 def yaml_value(key: str) -> float:
     text = (REPO / "config/default.yaml").read_text(encoding="utf-8")
-    m = re.search(rf"^\s*{re.escape(key)}:\s*([-\d.eE+]+)", text, re.MULTILINE)
+    yaml_key = {"max_fire_facing": "max_fire_facing_deg",
+                "switch_hysteresis": "switch_hysteresis_deg"}.get(key, key)
+    m = re.search(rf"^\s*{re.escape(yaml_key)}:\s*([-\d.eE+]+)", text, re.MULTILINE)
     if not m:
-        raise SystemExit(f"yaml 里没有 {key}")
+        raise SystemExit(f"yaml 里没有 {yaml_key}")
     return float(m.group(1))
 
 
