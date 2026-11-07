@@ -28,6 +28,13 @@ $ErrorActionPreference = "Stop"
 $logPath = Join-Path (Split-Path $Queue) "auto-drive-log.md"
 $env:Path = "C:\opencv\opencv\build\x64\vc16\bin;" + $env:Path
 
+# Single instance: two drivers racing on git checkout can orphan a merge.
+$mutex = New-Object System.Threading.Mutex($false, "Global\rm_auto_drive")
+if (-not $mutex.WaitOne(0)) {
+    Write-Host "another auto_drive instance is already running; exiting"
+    exit 0
+}
+
 function Log([string]$text) {
     $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $line = "- $ts  $text"
