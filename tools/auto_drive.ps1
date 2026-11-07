@@ -20,6 +20,7 @@ param(
     [int]$CooldownSec = 20,
     [switch]$Loop,
     [int]$IdleMinutes = 10,
+    [switch]$Notify,
     [switch]$DryRun
 )
 
@@ -36,6 +37,34 @@ function Log([string]$text) {
 
 if (-not (Test-Path $logPath)) {
     Set-Content -LiteralPath $logPath -Value "# 自动推进日志`n" -Encoding UTF8
+}
+
+$statusPath = Join-Path (Split-Path $Queue) "auto-status.json"
+
+function Write-Status([string]$task, [string]$state) {
+    $pending = 0
+    try {
+        $pending = @((Get-Content -LiteralPath $Queue -Raw -Encoding UTF8 | ConvertFrom-Json).tasks |
+                     Where-Object { $_.status -eq "pending" }).Count
+    } catch {}
+    [pscustomobject]@{
+        updated = (Get-Date -Format "s")
+        task    = $task
+        state   = $state
+        pending = $pending
+    } | ConvertTo-Json | Set-Content -LiteralPath $statusPath -Encoding UTF8
+    if ($Notify) {
+        try {
+            Add-Type -AssemblyName System.Windows.Forms
+            Add-Type -AssemblyName System.Drawing
+            $icon = New-Object System.Windows.Forms.NotifyIcon
+            $icon.Icon = [System.Drawing.SystemIcons]::Information
+            $icon.Visible = $true
+            $icon.ShowBalloonTip(4000, "auto_drive", "$task -> $state (pending $pending)", "Info")
+            Start-Sleep -Seconds 1
+            $icon.Dispose()
+        } catch { }
+    }
 }
 
 Log ("驱动器启动（Loop=" + $Loop + ", MaxTasks=" + $MaxTasks + "）")
@@ -112,6 +141,7 @@ while ($true) {
 
         $data.tasks | Where-Object { $_.id -eq $task.id } | ForEach-Object { $_.status = $status }
         $data | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $Queue -Encoding UTF8
+        Write-Status $task.id $status
         $ran++
         if ($CooldownSec -gt 0) { Start-Sleep -Seconds $CooldownSec }
     }

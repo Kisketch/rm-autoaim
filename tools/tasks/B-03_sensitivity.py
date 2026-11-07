@@ -58,16 +58,20 @@ def main() -> int:
     for key, cur, val, h3, d3, h4, d4 in rows:
         lines.append(f"| `{key}` | {cur:g} | {val:g} | {h3:.1f}% | {d3:+.1f} | {h4:.1f}% | {d4:+.1f} |")
 
+    best = max(rows, key=lambda r: r[4] + r[6])
+    both_up = best[4] > 0 and best[6] > 0
     lines += [
         "",
         "## 结论",
         "",
-        f"- 最敏感的参数是 `{worst[0]}`：±20% 只带来 3.avi {worst[4]:+.1f} pp、4.avi {worst[6]:+.1f} pp。",
-        "- 所有参数的 ±20% 扰动都在 ±2 pp 内，且没有一个是“两边同时变好”——典型的平台区。",
-        "- 这支持 BASELINE 的判断：**继续调参没有净收益**，要提升必须改信息条件"
-        "（帧率、检测器、标定精度）或改模型结构（IMM/遮挡重关联）。",
+        f"- 最敏感的参数是 `{worst[0]}`：±20% 带来 3.avi {worst[4]:+.1f} pp、4.avi {worst[6]:+.1f} pp。",
+        f"- 单点最优是 `{best[0]}={best[2]:g}`：3.avi {best[3]:.1f}%（{best[4]:+.1f}）、4.avi {best[5]:.1f}%（{best[6]:+.1f}）。",
+        ("- **这一项是两条视频同时变好**，不是平台噪声，需要进一步验证射频（本脚本只测命中率）。"
+         if both_up else
+         "- 没有一项能让两条视频同时变好，符合平台区的判断。"),
+        "- 其余参数 ±20% 都在 ±1 pp 内，可以认为已经调不动；提升要靠改信息条件或模型结构。",
         "",
-        "*每个点都是真实评测，缓存命中后单次约 6 s。*",
+        "*每个点都是真实评测，缓存命中后单次约 6 s；命中率不含射频，改动前必须复核 hits/s。*",
     ]
     out = Path("docs/parameter_sensitivity.md")
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
