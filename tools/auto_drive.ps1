@@ -1,21 +1,25 @@
-# auto_drive.ps1 - run the improvement queue through headless OpenCode sessions.
+# auto_drive.ps1 - run the improvement queue.
 #
-#   powershell -NoProfile -ExecutionPolicy Bypass -File tools\auto_drive.ps1 -MaxTasks 1
-#   powershell -NoProfile -ExecutionPolicy Bypass -File tools\auto_drive.ps1 -DryRun
+#   powershell -NoProfile -ExecutionPolicy Bypass -File tools\auto_drive.ps1
+#   powershell -NoProfile -ExecutionPolicy Bypass -File tools\auto_drive.ps1 -Loop -IdleMinutes 10
 #
 # For each pending task in the queue:
-#   1. require a clean worktree, cut a branch auto/<id>-<ts>
-#   2. run `opencode run --auto` with the task prompt (timeout per task)
-#   3. run the task gate (python tools/regression.py)
-#   4. green -> commit + fast-forward main; red -> drop the branch, keep main intact
+#   1. cut a branch auto/<id>-<ts> (only modified tracked files block the run)
+#   2. execute `py <task.script>`
+#   3. run the gate `py tools/regression.py`
+#   4. green -> commit + fast-forward main; red -> drop the branch, main untouched
 #   5. update the queue file and append to RM-PRO/auto-drive-log.md
+#
+# With -Loop the driver stays resident: when the queue is empty it sleeps
+# IdleMinutes and checks again. Stop it with Ctrl+C or by killing the process.
 
 param(
     [string]$Repo  = "C:\Users\Lgnatius\Desktop\RM\autoaim-takeover",
     [string]$Queue = "C:\Users\Lgnatius\Desktop\RM-PRO\auto-queue.json",
     [int]$MaxTasks = 1,
-    [int]$TaskMinutes = 25,
     [int]$CooldownSec = 20,
+    [switch]$Loop,
+    [int]$IdleMinutes = 10,
     [switch]$DryRun
 )
 
@@ -34,71 +38,85 @@ if (-not (Test-Path $logPath)) {
     Set-Content -LiteralPath $logPath -Value "# 自动推进日志`n" -Encoding UTF8
 }
 
-for ($n = 0; $n -lt $MaxTasks; $n++) {
-    $data = Get-Content -LiteralPath $Queue -Raw -Encoding UTF8 | ConvertFrom-Json
-    $task = $data.tasks | Where-Object { $_.status -eq "pending" } | Select-Object -First 1
-    if (-not $task) { Log "队列为空，退出"; break }
+Log ("驱动器启动（Loop=" + $Loop + ", MaxTasks=" + $MaxTasks + "）")
 
-    Log "开始 $($task.id)：$($task.title)"
-    if ($DryRun) { Write-Host "  prompt: $($task.prompt.Substring(0, [Math]::Min(120, $task.prompt.Length)))..."; continue }
+while ($true) {
+    $ran = 0
+    while ($ran -lt $MaxTasks) {
+        $data = Get-Content -LiteralPath $Queue -Raw -Encoding UTF8 | ConvertFrom-Json
+        $task = $data.tasks | Where-Object { $_.status -eq "pending" } | Select-Object -First 1
+        if (-not $task) { break }
 
-    Push-Location $Repo
-    try {
-        $dirty = git status --porcelain | Where-Object { $_ -match '^[ MARC][MD]' }
-        if ($dirty) { Log "工作区有未提交的修改，跳过（先提交或还原）"; break }
+        Log "开始 $($task.id)：$($task.title)"
+        if ($DryRun) { Write-Host "  script: $($task.script)"; $ran++; continue }
 
-        $ts = Get-Date -Format "MMdd-HHmm"
-        $branch = "auto/$($task.id)-$ts"
-        git checkout -q -b $branch
+        Push-Location $Repo
+        $status = "failed"
+        try {
+            $dirty = git status --porcelain | Where-Object { $_ -match '^[ MARC][MD]' }
+            if ($dirty) { Log "有未提交的修改，跳到下一个"; break }
 
-        $scriptRel = $task.script
-        if (-not $scriptRel) {
-            Log "  该任务还没有可执行脚本（tools/tasks/<id>_*.py），跳过"
-            $task.status = "blocked"
-            $data.tasks | Where-Object { $_.id -eq $task.id } | ForEach-Object { $_.status = $task.status }
-            $data | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $Queue -Encoding UTF8
-            continue
+            $scriptRel = $task.script
+            if (-not $scriptRel -or -not (Test-Path (Join-Path $Repo $scriptRel))) {
+                Log "  没有可执行脚本 ($scriptRel)，标 blocked"
+                $task.status = "blocked"
+                $data | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $Queue -Encoding UTF8
+                $ran++
+                continue
+            }
+
+            $ts = Get-Date -Format "MMdd-HHmm"
+            $branch = "auto/$($task.id)-$ts"
+            git checkout -q -b $branch
+
+            Log "  执行 py $scriptRel"
+            $out = & py $scriptRel 2>&1
+            Log "  脚本尾行：`n$(($out | Select-Object -Last 6) -join "`n")"
+
+            Log "  跑门禁"
+            $gateOut = & py tools/regression.py 2>&1
+            $gateOk = ($LASTEXITCODE -eq 0)
+            Log ("  门禁 " + $(if ($gateOk) { "PASS" } else { "FAIL" }))
+
+            if ($gateOk) {
+                git add -A
+                $msg = "auto($($task.id)): $($task.title)"
+                $null = git commit -q -m $msg 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    git checkout -q main
+                    git merge -q --ff-only $branch
+                    Log "  已合入 main：$msg"
+                    $task.status = "done"
+                } else {
+                    Log "  没有可提交的改动"
+                    git checkout -q main
+                    git branch -D $branch | Out-Null
+                    $task.status = "done"
+                }
+            } else {
+                if (git status --porcelain) { git checkout -q -- . }
+                git checkout -q main
+                git branch -D $branch | Out-Null
+                Log "  门禁未过，丢弃分支"
+                $task.status = "failed"
+            }
+            $status = $task.status
+        }
+        catch {
+            Log "  异常：$($_.Exception.Message)"
+            try { git checkout -q main } catch {}
+        }
+        finally {
+            Pop-Location
         }
 
-        Log "  执行 py $scriptRel"
-        $out = & py $scriptRel 2>&1
-        $ok = ($LASTEXITCODE -eq 0)
-        $tail = ($out | Select-Object -Last 20) -join "`n"
-        Log "  脚本输出尾部：`n$tail"
-
-        Log "  跑门禁"
-        $gateOut = & py tools/regression.py 2>&1
-        $gateOk = ($LASTEXITCODE -eq 0) -and $ok
-        Log ("  门禁 " + $(if ($gateOk) { "PASS" } else { "FAIL" }))
-
-        if ($gateOk) {
-            git add -A
-            $msg = "auto($($task.id)): $($task.title)"
-            git commit -q -m $msg
-            git checkout -q main
-            git merge -q --ff-only $branch
-            Log "  已合入 main：$msg"
-            $task.status = "done"
-        } else {
-            $changed = git status --porcelain
-            if ($changed) { git checkout -q -- . }
-            git checkout -q main
-            git branch -D $branch | Out-Null
-            Log "  门禁未过，已丢弃分支 $branch"
-            $task.status = "failed"
-        }
-        $task | Add-Member -NotePropertyName finished -NotePropertyValue (Get-Date -Format "s") -Force
-    }
-    catch {
-        Log "  异常：$($_.Exception.Message)"
-        try { git checkout -q main } catch {}
-    }
-    finally {
-        Pop-Location
+        $data.tasks | Where-Object { $_.id -eq $task.id } | ForEach-Object { $_.status = $status }
+        $data | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $Queue -Encoding UTF8
+        $ran++
+        if ($CooldownSec -gt 0) { Start-Sleep -Seconds $CooldownSec }
     }
 
-    $data.tasks | Where-Object { $_.id -eq $task.id } | ForEach-Object { $_.status = $task.status }
-    $data | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $Queue -Encoding UTF8
-
-    if ($CooldownSec -gt 0 -and $n -lt $MaxTasks - 1) { Start-Sleep -Seconds $CooldownSec }
+    if (-not $Loop) { break }
+    Log "队列已空，休眠 $IdleMinutes 分钟后重试"
+    Start-Sleep -Seconds ($IdleMinutes * 60)
 }
