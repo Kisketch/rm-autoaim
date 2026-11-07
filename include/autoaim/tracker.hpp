@@ -1,4 +1,4 @@
-// Target tracking.
+﻿// Target tracking.
 //
 // RobotTracker - whole-robot EKF ("整车观测"). Based on the 9-state model of
 // chenjunnn/rm_auto_aim (MIT) and the d_z extension of FYT2024 (Apache-2.0),
@@ -51,6 +51,7 @@ public:
     double stamp() const { return stamp_; }
     const std::string& id() const { return id_; }
     int armorsNum() const { return cfg_.armors_num; }
+    int trackingFrames() const { return tracking_frames_; }
 
     // State extrapolated to time t (constant velocity / constant angular velocity).
     Vec predict(double t) const;
@@ -90,6 +91,7 @@ private:
     int detect_count_ = 0;
     int unmatched_with_target_ = 0;
     double nis_ema_ = 3.0;
+    int tracking_frames_ = 0;
     double q_scale_ = 1.0;
     // Gate widening when frames are far apart (dropped frames, lower fps):
     // gates are tuned for 40 ms, a 120 ms gap needs ~3x the radius.

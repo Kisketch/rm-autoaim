@@ -1,4 +1,4 @@
-#include "autoaim/tracker.hpp"
+﻿#include "autoaim/tracker.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -328,6 +328,7 @@ void RobotTracker::update(const FrameObservations& frame) {
             break;
         case TrackState::LOST: break;
     }
+    tracking_frames_ = (state_ == TrackState::TRACKING) ? tracking_frames_ + 1 : 0;
 
     // Divergence guard: the target is visible but nothing matches for a while.
     if (!matched && target_seen) {

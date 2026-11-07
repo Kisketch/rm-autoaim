@@ -1,4 +1,4 @@
-// All tunable parameters, loaded from a YAML file (cv::FileStorage).
+﻿// All tunable parameters, loaded from a YAML file (cv::FileStorage).
 // Every field has a default so a missing key never breaks a run.
 #pragma once
 
@@ -118,7 +118,9 @@ struct AimerConfig {
     double fire_sigma_scale = 0.6;
     // simulated gimbal
     double gimbal_tau = 0.03;        // s, first-order lag
-    double gimbal_max_rate = 12.0;   // rad/s
+    double gimbal_max_rate = 12.0;
+    // Do not fire during the first N frames after (re)acquiring TRACKING.
+    int warmup_frames = 0;       // frames since (re)acquiring TRACKING
     // Velocity feedforward into the simulated gimbal (0 = pure P lag).
     // Models a real gimbal that also receives the commanded yaw rate.
     double gimbal_ff = 0.0;

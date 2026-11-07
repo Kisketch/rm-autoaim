@@ -1,4 +1,4 @@
-#include "autoaim/aimer.hpp"
+﻿#include "autoaim/aimer.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -151,15 +151,16 @@ AimCommand RobotAimer::aim(const RobotTracker& tracker, double now) const {
         cfg_.fire_sigma_scale <= 0 || cmd.sigma_lat < cfg_.fire_sigma_scale * geo.panel_width / 2;
 
     const bool tracking = tracker.state() == TrackState::TRACKING;
+    const bool warmed = tracker.trackingFrames() >= cfg_.warmup_frames;
     if (center_mode) {
         // the plate passes the aim line; it is hittable while its centre is within
         // the tolerance, i.e. while |r sin(facing)| < tol
         const double r = tracker.armorRadius(x, k);
         const double tol = cfg_.fire_tolerance_scale * geo.panel_width / 2;
         const double window = std::min(cfg_.center_fire_window_deg, std::asin(std::min(1.0, tol / r)) * 180 / kPi);
-        cmd.fire = tracking && confident && std::abs(cmd.facing_deg) < window;
+        cmd.fire = tracking && warmed && confident && std::abs(cmd.facing_deg) < window;
     } else {
-        cmd.fire = tracking && confident && std::abs(cmd.facing_deg) < cfg_.max_fire_facing_deg;
+        cmd.fire = tracking && warmed && confident && std::abs(cmd.facing_deg) < cfg_.max_fire_facing_deg;
     }
     return cmd;
 }
