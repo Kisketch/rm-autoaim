@@ -86,6 +86,8 @@ struct TrackerConfig {
     // Rationale: a strafing robot reverses direction within the 0.3 s lead, and
     // a CV extrapolation overshoots; tau ~ 1 s matches a 2 s strafe period.
     double singer_tau = 0.0;
+    // Carry vx/vy/omega through a short LOST: the plate jumps, the robot keeps moving.
+    bool carry_velocity = true;
     // Constant-acceleration extension for the robot centre: two extra states
     // (AXC, AYC) appended after DZ so no existing index moves. q_acc is the
     // jerk spectral density; 0 disables the model.

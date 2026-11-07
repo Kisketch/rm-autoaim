@@ -96,6 +96,10 @@ RobotTracker::Vec RobotTracker::predict(double t) const {
 
 void RobotTracker::init(const ArmorObservation& obs, double stamp) {
     const double r = cfg_.init_radius;
+    const Vec prev = x_;
+    const double gap = stamp - stamp_;
+    const bool carry = cfg_.carry_velocity && gap > 0.0 && gap < 1.5 &&
+                       (std::abs(prev[VXC]) + std::abs(prev[VYC]) + std::abs(prev[W]) > 1e-6);
     x_ = Vec::all(0);
     x_[XC] = obs.position[0] + r * std::cos(obs.yaw);
     x_[YC] = obs.position[1] + r * std::sin(obs.yaw);
@@ -104,6 +108,7 @@ void RobotTracker::init(const ArmorObservation& obs, double stamp) {
     x_[R1] = r;
     x_[R2] = r;
     x_[DZ] = 0;
+    if (carry) { x_[VXC] = prev[VXC]; x_[VYC] = prev[VYC]; x_[W] = prev[W]; }
     const double d = obs.distance;
     const double p0[N] = {0.05 * d, 1.0, 0.05 * d, 1.0, 0.05, 0.5, 0.3, 3.0, 0.08, 0.08, 0.05, 3.0, 3.0};
     P_ = Mat::zeros();

@@ -102,6 +102,7 @@ Config Config::load(const std::string& path) {
     get(t, "q_adapt_max", c.tracker.q_adapt_max);
     get(t, "nis_ema_alpha", c.tracker.nis_ema_alpha);
     get(t, "singer_tau", c.tracker.singer_tau);
+    { int v = 1; get(t, "carry_velocity", v); c.tracker.carry_velocity = v != 0; }
     get(t, "ca_model", c.tracker.ca_model);
     get(t, "q_acc", c.tracker.q_acc);
 
@@ -148,6 +149,7 @@ bool setParam(Config& c, const std::string& key, double v) {
     else if (key == "q_adapt_max") c.tracker.q_adapt_max = v;
     else if (key == "nis_alpha") c.tracker.nis_ema_alpha = v;
     else if (key == "singer_tau") c.tracker.singer_tau = v;
+    else if (key == "carry_velocity") c.tracker.carry_velocity = v != 0;
     else if (key == "channel_diff_threshold") c.detector.channel_diff_threshold = static_cast<int>(std::lround(v));
     else if (key == "diff_adaptive") c.detector.channel_diff_adaptive = v != 0;
     else if (key == "ca_model") c.tracker.ca_model = v != 0;
