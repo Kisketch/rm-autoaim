@@ -62,3 +62,15 @@ def eval_videos(sets: list[str], tag: str) -> dict[str, tuple[float, float]]:
                     REPO / "runs" / f"task_{tag}_{name}", *sets])
         out[name] = video_metrics(text)
     return out
+
+
+# Canonical objective used by every sweep from F-01 on:
+#   DPS = hits per second x damage per hit (17 mm = 10 HP)
+# hits/s already folds hit rate and fire rate together, so ranking by DPS is
+# equivalent to ranking by damage output. Hit rate is kept only as a tie-break
+# (it measures ammo efficiency, not damage).
+DAMAGE_PER_HIT = 10
+
+
+def dps(hits_per_sec: float) -> float:
+    return hits_per_sec * DAMAGE_PER_HIT
