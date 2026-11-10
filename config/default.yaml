@@ -5,16 +5,21 @@
 #   autoaim_sim --set key=value                    (ground-truth scenarios)
 # see README.md, section "Tuning log".
 
-# Camera intrinsics. The test videos (1440x1080) come without calibration.
-# fx = 2400 px corresponds to a 1440x1080 / 3.45 um sensor with an 8 mm lens
-# (Hikvision MV-CS016-10UC + 8 mm, a common RoboMaster setup). The videos do
-# not constrain fx (depth from 50 px plates is too weak); results depend on it.
+# Camera intrinsics: MEASURED calibration of the team's camera, imported
+# 2026-11-10 from the legacy on-robot code (auto-aim-master/text.yaml), which
+# ran with these values. dist is copied in the legacy stored order, which the
+# legacy solver passes to solvePnP unchanged; note the legacy order may be
+# (k1, k2, k3, p1, p2) rather than OpenCV's (k1, k2, p1, p2, k3) - confirm
+# against the calibration script before re-deriving anything from it.
+# The legacy extrinsics (R_camera2gimbal axis permutation, lever arm
+# t = [0.10, -0.05, 0] m) are not representable in CameraModel yet; see
+# docs/software_completion.md, data-needed list item 1.
 camera:
-   fx: 2400.
-   fy: 2400.
-   cx: 720.
-   cy: 540.
-   dist: [ 0., 0., 0., 0., 0. ]
+   fx: 2399.5837
+   fy: 2398.5972
+   cx: 688.7026
+   cy: 533.4234
+   dist: [ 0.002592988512527, 0.048045410117226, 0.293333651684761, 0.0001643665962815789, 0.0001925868649099913 ]
    pitch_deg: 0.          # tuned: -6..+6 swept, 0 is within noise of the best
 
 detector:
@@ -75,7 +80,7 @@ tracker:
    singer_tau: 0.3
 
 ballistic:
-   bullet_speed: 25.      # 17 mm fallback; feed the measured speed at runtime
+   bullet_speed: 22.      # 17 mm MEASURED on the team's gun (legacy Base.h bullet_speed); setMeasuredBulletSpeed() still overrides at runtime
    gravity: 9.8
    drag_k: 0.019          # 17 mm: 0.5 * 1.169 * 0.47 * pi*0.0084^2 / 0.0032
    use_drag: 1
