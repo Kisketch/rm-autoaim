@@ -25,8 +25,9 @@ FLIGHT_MS = RANGE / BULLET * 1000
 
 def main() -> int:
     # one millisecond of gimbal/attitude error turns into this much angle error
-    deg_per_ms = OMEGA * math.pi / 180 * 0.001 * 180 / math.pi  # = omega(deg/s)*0.001
+    deg_per_ms = OMEGA * 0.001 * 180.0 / math.pi  # rad/s * 1 ms -> degrees
     budget_angle = 0.2 * PANEL_HALF_DEG     # spend at most 20 % of the half panel on timing
+    budget_ms = budget_angle / deg_per_ms    # total timing error budget in milliseconds
 
     lines = [
         "# 时间戳与延迟预算（G-02）",
@@ -50,9 +51,10 @@ def main() -> int:
         "",
         "| 项 | 允许误差 | 依据 |",
         "| --- | --- | --- |",
-        f"| 曝光时间戳抖动 σ | ≤ 1.0 ms | 占预算 {100 * 1.0 / (budget_angle / deg_per_ms):.0f}% |",
-        f"| 图像→姿态对齐误差 | ≤ {min(2.0, budget_angle / deg_per_ms):.1f} ms | 姿态插值残差 |",
-        f"| 总延迟估计误差 | ≤ 3.0 ms | 等价 {(3.0 * deg_per_ms):.2f}°，占半宽 {100 * 3.0 * deg_per_ms / PANEL_HALF_DEG:.0f}% |",
+        f"| 曝光时间戳抖动 σ | ≤ {0.4 * budget_ms:.1f} ms | 占预算 40%（均方根分配） |",
+        f"| 图像→姿态对齐误差 | ≤ {0.4 * budget_ms:.1f} ms | 姿态环形缓冲插值残差 |",
+        f"| 总延迟估计误差 | ≤ {0.6 * budget_ms:.1f} ms | 等效 {(0.6 * budget_ms * deg_per_ms):.2f}° |",
+        f"| **三者均方根合计** | ≤ {budget_ms:.2f} ms | 与总预算一致（RSS 合成，不线性相加） |",
         "| 延迟绝对值 | 实测替换 60 ms | 误差在 60±15 ms 内对命中率影响 <1 pp（仿真扫描） |",
         "",
         "## 采样与延迟的关系（为什么提帧率有用但不翻倍）",
