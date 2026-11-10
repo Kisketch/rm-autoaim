@@ -74,6 +74,13 @@ double flightGuess(const Ballistics& ball, const cv::Vec3d& p) {
     return s.ok ? s.t_fly : cv::norm(p) / ball.bulletSpeed();
 }
 
+// Fixed mechanical zero offsets, applied to the final command before the
+// rate tracker sees it (a constant offset does not change the rates).
+void applyAimOffsets(const AimerConfig& cfg, AimCommand& cmd) {
+    if (cfg.yaw_offset_deg != 0.0) cmd.yaw = wrapAngle(cmd.yaw + cfg.yaw_offset_deg * kPi / 180.0);
+    if (cfg.pitch_offset_deg != 0.0) cmd.pitch += cfg.pitch_offset_deg * kPi / 180.0;
+}
+
 }  // namespace
 
 // ------------------------------------------------------------------ robot
@@ -179,6 +186,7 @@ AimCommand RobotAimer::aim(const RobotTracker& tracker, double now) const {
     } else {
         cmd.fire = tracking && warmed && confident && std::abs(cmd.facing_deg) < cfg_.max_fire_facing_deg;
     }
+    applyAimOffsets(cfg_, cmd);
     rate_.update(cmd.yaw, cmd.pitch, now, cfg_.gimbal_max_rate, cmd.yaw_rate, cmd.pitch_rate);
     return cmd;
 }
@@ -203,6 +211,7 @@ AimCommand PointAimer::aim(const PointTracker& tracker, double now) const {
     cmd.valid = true;
     cmd.t_impact = t0 + cmd.t_fly;
     cmd.fire = true;
+    applyAimOffsets(cfg_, cmd);
     rate_.update(cmd.yaw, cmd.pitch, now, cfg_.gimbal_max_rate, cmd.yaw_rate, cmd.pitch_rate);
     return cmd;
 }
@@ -214,6 +223,7 @@ AimCommand DirectAimer::aim(const FrameObservations& frame, double now) const {
     const int idx = chooseInitialTarget(frame.armors);
     if (idx < 0) return cmd;
     if (!aimAt(ball_, frame.armors[idx].position, cmd)) return cmd;
+    applyAimOffsets(cfg_, cmd);
     cmd.valid = true;
     cmd.t_impact = now + cfg_.latency + cmd.t_fly;
     cmd.fire = true;

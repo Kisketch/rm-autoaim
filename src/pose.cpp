@@ -25,7 +25,12 @@ CameraModel::CameraModel(const CameraConfig& cfg) {
     K_ = cfg.K();
     dist_ = cv::Mat(cfg.dist, true).reshape(1, 1);
     // positive pitch looks down: rotate the forward axis about world +y
-    R_wc_ = rotY(cfg.pitch_deg * kPi / 180.0) * kWorldFromOptical;
+    R_wg_ = rotY(cfg.pitch_deg * kPi / 180.0);
+    // Camera->gimbal rotation: measured extrinsic when configured, else the
+    // built-in optical->world axis convention (historical behaviour).
+    R_cg_ = cfg.hasExtrinsicRotation() ? cv::Matx33d(cfg.R_cam2gimbal.data()) : kWorldFromOptical;
+    if (cfg.t_cam2gimbal.size() == 3)
+        t_cg_ = {cfg.t_cam2gimbal[0], cfg.t_cam2gimbal[1], cfg.t_cam2gimbal[2]};
     fx_ = K_(0, 0), fy_ = K_(1, 1), cx_ = K_(0, 2), cy_ = K_(1, 2);
     fast_projection_ = dist_.total() <= 5;
     if (fast_projection_) {
@@ -33,13 +38,20 @@ CameraModel::CameraModel(const CameraConfig& cfg) {
     }
 }
 
+cv::Vec3d CameraModel::cameraToWorld(const cv::Vec3d& p_cam) const {
+    return R_wg_ * (R_cg_ * p_cam + t_cg_);
+}
+
+cv::Vec3d CameraModel::worldToCamera(const cv::Vec3d& p_world) const {
+    return R_cg_.t() * (R_wg_.t() * p_world - t_cg_);
+}
+
 bool CameraModel::inFront(const cv::Vec3d& world) const {
-    const cv::Vec3d c = R_wc_.t() * world;
-    return c[2] > 0.05;
+    return worldToCamera(world)[2] > 0.05;
 }
 
 cv::Point2d CameraModel::project(const cv::Vec3d& world) const {
-    const cv::Vec3d c = R_wc_.t() * world;
+    const cv::Vec3d c = worldToCamera(world);
     if (fast_projection_) {
         // Direct pinhole + (k1,k2,p1,p2,k3) distortion, the same math
         // cv::projectPoints performs for the 5-coefficient model, without
@@ -124,7 +136,7 @@ bool PoseSolver::solve(const ArmorDetection& det, ArmorObservation& out) const {
         const double cost = err + 2.0 * std::abs(pitch - expected_pitch);
         if (cost < best_cost) {
             best_cost = cost, best = i, best_yaw = yaw;
-            best_t = camera_.R_world_cam() * t_c;
+            best_t = camera_.cameraToWorld(t_c);
         }
     }
     (void)best;

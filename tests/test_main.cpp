@@ -393,7 +393,148 @@ static void testKeypointDetector() {
     std::printf("keypoint detector: synthetic-tensor postprocess + fallback ok\n");
 }
 
+static void testDetectorDegenerateInputs() {
+    // Regression: detect() used to segfault on empty/degenerate frames
+    // (cv::split yields zero channels on an empty Mat, then ch[2] was read).
+    // A dropped camera frame must read as "no armors", never kill the
+    // vision process.
+    DetectorConfig dc;
+    dc.model_path = "";
+    Detector det(dc);
+    cv::Mat empty;
+    CHECK(det.detect(empty).empty(), "empty frame");
+    cv::Mat tiny(1, 1, CV_8UC3, cv::Scalar(0, 0, 255));
+    CHECK(det.detect(tiny).empty(), "1x1 frame");
+    cv::Mat gray(64, 64, CV_8UC1, cv::Scalar(200));
+    CHECK(det.detect(gray).empty(), "gray frame");
+    cv::Mat fl(64, 64, CV_32FC3, cv::Scalar(0.5f, 0.5f, 0.5f));
+    CHECK(det.detect(fl).empty(), "float frame");
+    cv::Mat black(1080, 1440, CV_8UC3, cv::Scalar(0, 0, 0));
+    CHECK(det.detect(black).empty(), "black frame");
+}
+
+static void testCameraExtrinsic() {
+    // Lever-arm support: with a configured camera->gimbal extrinsic, the
+    // transforms round-trip and a synthetic armor generated THROUGH the
+    // extrinsic model is recovered by the solver; the default model (no
+    // extrinsic) must stay measurably wrong on the same detection, which is
+    // the error the lever arm exists to remove.
+    CameraConfig cc;
+    cc.fx = cc.fy = 2400;
+    cc.cx = 720;
+    cc.cy = 540;
+    cc.dist = {0, 0, 0, 0, 0};
+    CameraConfig cx = cc;
+    cx.R_cam2gimbal = {0, 0, 1, -1, 0, 0, 0, -1, 0};
+    cx.t_cam2gimbal = {0.10, -0.05, 0.0};
+    CameraModel withX(cx), plain(cc);
+    const cv::Vec3d p(3.0, -1.2, 0.4);
+    CHECK(cv::norm(withX.cameraToWorld(withX.worldToCamera(p)) - p) < 1e-12,
+          "extrinsic round trip");
+    // Generate a detection through the extrinsic model.
+    ArmorDetection det;
+    det.type = ArmorType::SMALL;
+    det.number = "4";
+    const cv::Vec3d center(5.0, 0.8, 0.15);
+    auto corners = armorCorners(center, 0.4, 15.0 * kPi / 180.0, det.type);
+    for (int i = 0; i < 4; ++i) det.corners[i] = cv::Point2f(withX.project(corners[i]));
+    det.center = (det.corners[0] + det.corners[2]) * 0.5f;
+    PoseConfig pc;
+    ArmorObservation o1, o2;
+    CHECK(PoseSolver(withX, pc).solve(det, o1), "solve with extrinsic model");
+    CHECK(cv::norm(o1.position - center) < 0.01, "extrinsic model recovers position: %.4f m",
+          cv::norm(o1.position - center));
+    CHECK(PoseSolver(plain, pc).solve(det, o2), "solve with default model");
+    CHECK(cv::norm(o2.position - center) > 0.03,
+          "default model keeps the lever-arm error: %.4f m", cv::norm(o2.position - center));
+}
+
+static void testAimerOffsets() {
+    // Fixed aim offsets must shift the final command by exactly the
+    // configured amounts and change nothing else.
+    CameraConfig cc;
+    cc.fx = cc.fy = 2400;
+    cc.cx = 720;
+    cc.cy = 540;
+    cc.dist = {0, 0, 0, 0, 0};
+    CameraModel cam(cc);
+    BallisticConfig bc;
+    auto run = [&](double yo, double po) {
+        AimerConfig ac;
+        ac.latency = 0.0;
+        ac.yaw_offset_deg = yo;
+        ac.pitch_offset_deg = po;
+        RobotTracker tracker(TrackerConfig{}, cam);
+        RobotAimer aimer(ac, Ballistics(bc));
+        FrameObservations f;
+        AimCommand cmd;
+        for (int i = 0; i < 30; ++i) {
+            f.stamp = i / 120.0;
+            f.armors.clear();
+            ArmorObservation o;
+            o.det.number = "4";
+            o.det.type = ArmorType::SMALL;
+            o.position = {5.0, 0.8, 0.15};
+            o.yaw = 0.4;
+            o.distance = 5.06;
+            f.armors = {o};
+            tracker.update(f);
+            cmd = aimer.aim(tracker, f.stamp);
+        }
+        return cmd;
+    };
+    AimCommand base = run(0.0, 0.0), shifted = run(2.0, -1.0);
+    CHECK(base.valid && shifted.valid, "offset test commands valid");
+    CHECK(std::abs(wrapAngle(shifted.yaw - base.yaw) - 2.0 * kPi / 180.0) < 1e-9,
+          "yaw offset exact: %.12f", wrapAngle(shifted.yaw - base.yaw));
+    CHECK(std::abs((shifted.pitch - base.pitch) + 1.0 * kPi / 180.0) < 1e-9,
+          "pitch offset exact: %.12f", shifted.pitch - base.pitch);
+    CHECK(shifted.fire == base.fire, "offset does not change fire decision");
+}
+
+static void testWindowedDetection() {
+    // Windowed (ROI) detection must reproduce full-frame results for
+    // armors inside the windows and drop armors outside them.
+    DetectorConfig dc;
+    dc.model_path = "";  // numbers stay "unknown"; geometry is what matters
+    Detector det(dc);
+    cv::Mat scene(1080, 1440, CV_8UC3, cv::Scalar(8, 8, 8));
+    auto drawArmor = [&](int cx, int cy) {
+        for (int s = -1; s <= 1; s += 2)
+            cv::rectangle(scene, cv::Rect(cx + s * 55 - 4, cy - 26, 8, 52),
+                          cv::Scalar(30, 30, 230), -1);
+        cv::rectangle(scene, cv::Rect(cx - 20, cy - 14, 40, 28), cv::Scalar(200, 200, 200), -1);
+    };
+    drawArmor(400, 400);
+    drawArmor(1000, 650);
+    auto full = det.detect(scene);
+    CHECK(full.size() == 2, "windowed test scene: full detect finds 2, got %zu", full.size());
+    // Windows around both armors (with margin) -> same detections.
+    std::vector<cv::Rect> both{{250, 250, 300, 300}, {850, 500, 300, 300}};
+    auto win = det.detect(scene, both);
+    CHECK(win.size() == full.size(), "windowed finds both: %zu vs %zu", win.size(), full.size());
+    for (const auto& a : full) {
+        bool matched = false;
+        for (const auto& b : win)
+            if (cv::norm(a.center - b.center) < 1.5f) matched = true;
+        CHECK(matched, "windowed centre matches full within 1.5 px");
+    }
+    // Window around only the first armor -> the second is not reported.
+    auto one = det.detect(scene, std::vector<cv::Rect>{{250, 250, 300, 300}});
+    CHECK(one.size() == 1, "single window finds 1, got %zu", one.size());
+    // Empty window list == full-frame detection.
+    auto viaEmpty = det.detect(scene, std::vector<cv::Rect>{});
+    CHECK(viaEmpty.size() == full.size(), "empty windows == full detect");
+    // Overlapping windows must not duplicate a light/armor.
+    auto overlap = det.detect(scene, std::vector<cv::Rect>{{250, 250, 300, 300}, {280, 280, 300, 300}});
+    CHECK(overlap.size() == 1, "overlapping windows dedupe: %zu", overlap.size());
+}
+
 int main() {
+    testDetectorDegenerateInputs();
+    testWindowedDetection();
+    testCameraExtrinsic();
+    testAimerOffsets();
     testBallistics();
     testPose();
     testTracker();

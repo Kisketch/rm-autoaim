@@ -16,6 +16,13 @@ struct CameraConfig {
     int width = 0, height = 0;  // 0 for legacy configs without a declared image size
     std::vector<double> dist = {0, 0, 0, 0, 0};
     double pitch_deg = 0.0;   // camera tilt, positive = looking down
+    // Optional measured camera->gimbal extrinsic (same convention as the
+    // sentry repo): R_cam2gimbal is 9 row-major values, t_cam2gimbal is the
+    // lever arm in metres, in the gimbal frame. Empty = the built-in axis
+    // convention with zero lever arm (the historical behaviour).
+    std::vector<double> R_cam2gimbal;
+    std::vector<double> t_cam2gimbal;
+    bool hasExtrinsicRotation() const { return R_cam2gimbal.size() == 9; }
     cv::Matx33d K() const { return {fx, 0, cx, 0, fy, cy, 0, 0, 1}; }
 };
 
@@ -128,6 +135,12 @@ struct BallisticConfig {
 
 struct AimerConfig {
     double latency = 0.06;           // s, capture -> bullet leaves the barrel
+    // Fixed aim offsets (deg) added to every command: the mechanical zero
+    // error between the camera/gimbal frame and the barrel. The legacy
+    // on-robot code carried measured values (yaw +0.5, pitch -0.5) in its
+    // Transmit step; keep 0 here until re-measured in this frame convention.
+    double yaw_offset_deg = 0.0;
+    double pitch_offset_deg = 0.0;
     double side_angle_deg = 20.0;    // switch early to the incoming armor (FYT2024)
     // Keep the current plate unless the next one is better by this many degrees.
     // Stops the selector from dithering around the switch boundary.

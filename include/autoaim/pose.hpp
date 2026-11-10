@@ -23,7 +23,11 @@ public:
     explicit CameraModel(const CameraConfig& cfg);
     const cv::Matx33d& K() const { return K_; }
     const cv::Mat& dist() const { return dist_; }
-    const cv::Matx33d& R_world_cam() const { return R_wc_; }
+    // Rotation world-from-camera (gimbal rotation * camera->gimbal rotation).
+    cv::Matx33d R_world_cam() const { return R_wg_ * R_cg_; }
+    // Full rigid transforms including the camera->gimbal lever arm.
+    cv::Vec3d cameraToWorld(const cv::Vec3d& p_cam) const;
+    cv::Vec3d worldToCamera(const cv::Vec3d& p_world) const;
     cv::Point2d project(const cv::Vec3d& world) const;  // world point -> pixel
     bool inFront(const cv::Vec3d& world) const;
     double fx() const { return K_(0, 0); }
@@ -31,7 +35,9 @@ public:
 private:
     cv::Matx33d K_;
     cv::Mat dist_;
-    cv::Matx33d R_wc_;
+    cv::Matx33d R_wg_;  // gimbal->world (from pitch_deg tilt)
+    cv::Matx33d R_cg_;  // camera->gimbal (config extrinsic or axis convention)
+    cv::Vec3d t_cg_{0, 0, 0};  // camera origin in the gimbal frame (lever arm)
     // Cached intrinsics + distortion for the allocation-free projection fast
     // path (distortion models with <= 5 coefficients; longer models fall back
     // to cv::projectPoints). Numerically identical to projectPoints for the

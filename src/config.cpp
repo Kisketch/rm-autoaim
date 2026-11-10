@@ -47,6 +47,8 @@ Config Config::load(const std::string& path) {
     get(cam, "height", c.camera.height);
     getDoubles(cam, "dist", c.camera.dist);
     get(cam, "pitch_deg", c.camera.pitch_deg);
+    getDoubles(cam, "R_cam2gimbal", c.camera.R_cam2gimbal);
+    getDoubles(cam, "t_cam2gimbal", c.camera.t_cam2gimbal);
 
     const auto d = fs["detector"];
     std::string color = "red";
@@ -123,6 +125,8 @@ Config Config::load(const std::string& path) {
 
     const auto a = fs["aimer"];
     get(a, "latency", c.aimer.latency);
+    get(a, "yaw_offset_deg", c.aimer.yaw_offset_deg);
+    get(a, "pitch_offset_deg", c.aimer.pitch_offset_deg);
     get(a, "side_angle_deg", c.aimer.side_angle_deg);
     get(a, "min_switch_omega", c.aimer.min_switch_omega);
     get(a, "max_fire_facing_deg", c.aimer.max_fire_facing_deg);

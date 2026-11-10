@@ -11,9 +11,14 @@
 # legacy solver passes to solvePnP unchanged; note the legacy order may be
 # (k1, k2, k3, p1, p2) rather than OpenCV's (k1, k2, p1, p2, k3) - confirm
 # against the calibration script before re-deriving anything from it.
-# The legacy extrinsics (R_camera2gimbal axis permutation, lever arm
-# t = [0.10, -0.05, 0] m) are not representable in CameraModel yet; see
-# docs/software_completion.md, data-needed list item 1.
+# The legacy extrinsics ARE representable now (R_cam2gimbal / t_cam2gimbal
+# below, added 2026-11-10) but are deliberately NOT enabled: the legacy
+# R_camera2gimbal axis permutation [0,0,1; -1,0,0; 0,-1,0] and lever arm
+# t = [0.10, -0.05, 0] m are expressed in the legacy code's frame
+# convention, which must be verified against this repo's gimbal frame on
+# the robot before use. To enable after verification, uncomment:
+#   R_cam2gimbal: [ 0., 0., 1., -1., 0., 0., 0., -1., 0. ]
+#   t_cam2gimbal: [ 0.10, -0.05, 0. ]
 camera:
    fx: 2399.5837
    fy: 2398.5972
@@ -90,6 +95,8 @@ ballistic:
 
 aimer:
    latency: 0.06
+   yaw_offset_deg: 0.         # fixed mechanical zero offset; legacy code measured +0.5 in its own convention - re-measure before setting
+   pitch_offset_deg: 0.       # legacy measured -0.5 in its own convention - re-measure before setting
    side_angle_deg: 20.        # tuned: higher = fewer but surer shots
    switch_hysteresis_deg: 3. # stay on the current plate unless the next is 3 deg better
    min_switch_omega: 1.0
