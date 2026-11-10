@@ -111,6 +111,9 @@ Config Config::load(const std::string& path) {
     get(b, "gravity", c.ballistic.gravity);
     get(b, "drag_k", c.ballistic.drag_k);
     get(b, "use_drag", c.ballistic.use_drag);
+    { int v = 17; get(b, "bullet_mm", v); c.ballistic.bullet_mm = v; }
+    get(b, "bullet_speed_42", c.ballistic.bullet_speed_42);
+    get(b, "drag_k_42", c.ballistic.drag_k_42);
 
     const auto a = fs["aimer"];
     get(a, "latency", c.aimer.latency);
@@ -139,6 +142,9 @@ bool setParam(Config& c, const std::string& key, double v) {
     else if (key == "camera_pitch") c.camera.pitch_deg = v;
     else if (key == "latency") c.aimer.latency = v;
     else if (key == "bullet_speed") c.ballistic.bullet_speed = v;
+    else if (key == "bullet_mm") c.ballistic.bullet_mm = static_cast<int>(std::lround(v));
+    else if (key == "bullet_speed_42") c.ballistic.bullet_speed_42 = v;
+    else if (key == "drag_k_42") c.ballistic.drag_k_42 = v;
     else if (key == "q_xyz") c.tracker.q_xyz = v;
     else if (key == "q_yaw") c.tracker.q_yaw = v;
     else if (key == "q_r") c.tracker.q_r = v;

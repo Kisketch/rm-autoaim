@@ -4,11 +4,16 @@
 
 namespace autoaim {
 
-Ballistics::Ballistics(const BallisticConfig& cfg) : cfg_(cfg) {}
+Ballistics::Ballistics(const BallisticConfig& cfg) : cfg_(cfg) { setBulletClass(cfg.bullet_mm); }
+
+double Ballistics::bulletSpeed() const {
+    if (speed_override_ > 0) return speed_override_;
+    return mm_ == 42 ? cfg_.bullet_speed_42 : cfg_.bullet_speed;
+}
 
 bool Ballistics::simulate(double pitch, double s_target, double& height, double& t_out) const {
-    const double v0 = cfg_.bullet_speed, g = cfg_.gravity;
-    const double k = cfg_.use_drag ? cfg_.drag_k : 0.0;
+    const double v0 = bulletSpeed(), g = cfg_.gravity;
+    const double k = cfg_.use_drag ? dragK() : 0.0;
     if (s_target <= 0) {
         height = 0, t_out = 0;
         return true;

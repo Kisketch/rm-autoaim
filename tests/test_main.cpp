@@ -55,6 +55,53 @@ static void testBallistics() {
             drag.simulate(sol.pitch, s, hh, tt);
             CHECK(std::abs(hh - z) < 1e-3, "solve accuracy s=%f z=%f got %f", s, z, hh);
         }
+
+    // Golden values captured from the implementation before the bullet-speed
+    // rework (default 17 mm config): the default path must not drift, or all
+    // existing tuning built on it silently changes.
+    {
+        Ballistics golden{ BallisticConfig{} };
+        const auto s1 = golden.solve(5.0, 0.5);
+        CHECK(s1.ok && std::abs(s1.pitch - 0.141715304681) < 1e-9 &&
+                  std::abs(s1.t_fly - 0.212001575796) < 1e-9,
+              "golden solve(5, 0.5): pitch %.12g t %.12g", s1.pitch, s1.t_fly);
+        const auto s2 = golden.solve(8.0, 0.5);
+        CHECK(s2.ok && std::abs(s2.pitch - 0.132565507948) < 1e-9 &&
+                  std::abs(s2.t_fly - 0.348777463964) < 1e-9,
+              "golden solve(8, 0.5): pitch %.12g t %.12g", s2.pitch, s2.t_fly);
+    }
+    // Measured-speed override: a slower bullet needs more pitch and flies
+    // longer; clearing the override restores the config solution exactly.
+    {
+        Ballistics b{ BallisticConfig{} };
+        b.setMeasuredBulletSpeed(23.0);
+        CHECK(b.hasMeasuredSpeed() && std::abs(b.bulletSpeed() - 23.0) < 1e-12, "override active");
+        const auto slow = b.solve(5.0, 0.5);
+        CHECK(slow.ok && slow.pitch > 0.141715304681 && slow.t_fly > 0.212001575796,
+              "slower bullet: pitch %f t %f", slow.pitch, slow.t_fly);
+        b.setMeasuredBulletSpeed(0.0);
+        CHECK(!b.hasMeasuredSpeed(), "override cleared");
+        const auto back = b.solve(5.0, 0.5);
+        CHECK(std::abs(back.pitch - 0.141715304681) < 1e-9, "golden restored after clear");
+    }
+    // 42 mm class (hero): its own speed/drag defaults, solvable, and slower
+    // than 17 mm over the same shot.
+    {
+        BallisticConfig c42;
+        c42.bullet_mm = 42;
+        Ballistics hero(c42);
+        CHECK(hero.bulletMm() == 42 && std::abs(hero.bulletSpeed() - c42.bullet_speed_42) < 1e-12 &&
+                  std::abs(hero.dragK() - c42.drag_k_42) < 1e-12,
+              "42 mm class params");
+        const auto s42 = hero.solve(8.0, 0.5);
+        const auto s17 = Ballistics{ BallisticConfig{} }.solve(8.0, 0.5);
+        CHECK(s42.ok && s17.ok && s42.t_fly > s17.t_fly, "42 mm flies longer: %f vs %f", s42.t_fly,
+              s17.t_fly);
+        hero.setBulletClass(17);
+        CHECK(hero.bulletMm() == 17 && std::abs(hero.bulletSpeed() - 25.0) < 1e-12, "class switch back");
+        hero.setBulletClass(20);  // unknown class falls back to 17
+        CHECK(hero.bulletMm() == 17, "unknown class -> 17");
+    }
 }
 
 static void testPose() {

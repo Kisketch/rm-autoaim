@@ -71,10 +71,13 @@ tracker:
    singer_tau: 0.3
 
 ballistic:
-   bullet_speed: 25.
+   bullet_speed: 25.      # 17 mm fallback; feed the measured speed at runtime
    gravity: 9.8
    drag_k: 0.019          # 17 mm: 0.5 * 1.169 * 0.47 * pi*0.0084^2 / 0.0032
    use_drag: 1
+   bullet_mm: 17          # projectile class: 17, or 42 for the hero
+   bullet_speed_42: 16.   # 42 mm placeholder - measure before use
+   drag_k_42: 0.009       # 42 mm: same formula, m = 0.042 kg, r = 0.021 m
 
 aimer:
    latency: 0.06

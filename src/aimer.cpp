@@ -56,7 +56,7 @@ bool aimAt(const Ballistics& ball, const cv::Vec3d& p, AimCommand& cmd) {
 
 double flightGuess(const Ballistics& ball, const cv::Vec3d& p) {
     const BallisticSolution s = ball.solve(std::hypot(p[0], p[1]), p[2]);
-    return s.ok ? s.t_fly : cv::norm(p) / ball.config().bullet_speed;
+    return s.ok ? s.t_fly : cv::norm(p) / ball.bulletSpeed();
 }
 
 }  // namespace

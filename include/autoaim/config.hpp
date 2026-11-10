@@ -96,12 +96,24 @@ struct TrackerConfig {
 };
 
 struct BallisticConfig {
-    double bullet_speed = 25.0;  // m/s
+    // Muzzle velocity is a measured quantity, not a constant of nature: the
+    // 2026 rules cap 17 mm at 25 m/s and lock the firing mechanism on
+    // over-speed, and the real speed drifts with the mechanism's state.
+    // These config values are the fallback; the robot app should feed the
+    // measured speed (referee system / muzzle sensor) through
+    // Ballistics::setMeasuredBulletSpeed at runtime.
+    double bullet_speed = 25.0;  // m/s, 17 mm
     double gravity = 9.8;
     // quadratic drag: a = -k |v| v,  k = 0.5 rho Cd A / m
     // 17 mm: m = 3.2 g, d = 16.8 mm, Cd ~ 0.47, rho = 1.169 -> k ~ 0.019 1/m
     double drag_k = 0.019;
     bool use_drag = true;
+    // Projectile class: 17 (everyone) or 42 (hero).  The 42 mm numbers are
+    // placeholders derived like the 17 mm ones (same formula, m = 42 g,
+    // d = 42 mm -> k ~ 0.009 1/m); fit both on the real robot before use.
+    int bullet_mm = 17;
+    double bullet_speed_42 = 16.0;  // m/s, placeholder until measured
+    double drag_k_42 = 0.009;
 };
 
 struct AimerConfig {
