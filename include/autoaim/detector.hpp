@@ -12,10 +12,12 @@
 
 #include <opencv2/dnn.hpp>
 
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "autoaim/config.hpp"
+#include "autoaim/keypoint_detector.hpp"
 #include "autoaim/types.hpp"
 
 namespace autoaim {
@@ -48,6 +50,10 @@ public:
     std::vector<ArmorDetection> detect(const cv::Mat& bgr, DetectorDebug* debug = nullptr);
 
     const DetectorConfig& config() const { return cfg_; }
+    // True when the ONNX keypoint backend is configured AND its model
+    // loaded; false means detect() runs the traditional pipeline (either by
+    // configuration, or as the fallback for an unloadable model).
+    bool usingOnnx() const { return keypoint_ && keypoint_->ok(); }
 
 private:
     std::vector<Light> findLights(const cv::Mat& bgr, cv::Mat& mask) const;
@@ -57,6 +63,7 @@ private:
 
     DetectorConfig cfg_;
     NumberClassifier classifier_;
+    std::unique_ptr<KeypointDetector> keypoint_;  // only when backend == "onnx"
 };
 
 Light makeLight(const cv::RotatedRect& rect, Color color);

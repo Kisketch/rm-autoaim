@@ -37,6 +37,10 @@ detector:
    refine_corners: 1
    classify_threshold: 0.7
    ignore_classes: [ "negative" ]
+   backend: "traditional"   # "onnx" enables the YOLO-pose keypoint backend (B-02)
+   onnx_path: ""            # path to the exported pose model, e.g. model/armor_pose.onnx
+   keypoint_conf: 0.25
+   keypoint_nms: 0.45
 
 pose:
    optimize_yaw: 1

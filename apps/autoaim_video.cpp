@@ -324,7 +324,7 @@ int main(int argc, char** argv) {
         o2 << "frame,yaw_diff_deg,width_ratio_a,width_ratio_b,bar_px_a,bar_px_b\n";
         for (std::size_t n = 0; n < obs.size(); ++n) {
             const auto& A = obs[n].armors;
-            if (A.size() != 2 || A[0].det.number != A[1].det.number) continue;
+            if (A.size() != 2 || deviceId(A[0].det) != deviceId(A[1].det)) continue;
             auto wr = [](const ArmorObservation& a) {
                 const double w = 0.5 * (cv::norm(a.det.corners[3] - a.det.corners[0]) + cv::norm(a.det.corners[2] - a.det.corners[1]));
                 const double h = 0.5 * (a.det.left.length + a.det.right.length);

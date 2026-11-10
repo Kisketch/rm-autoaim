@@ -15,6 +15,7 @@ add_library(autoaim_core STATIC
     src/pose.cpp
     src/pose_buffer.cpp
     src/camera_source.cpp
+    src/keypoint_detector.cpp
     src/tracker.cpp
     src/ballistics.cpp
     src/aimer.cpp

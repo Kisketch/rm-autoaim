@@ -76,6 +76,12 @@ Config Config::load(const std::string& path) {
     get(d, "label_path", c.detector.label_path);
     get(d, "classify_threshold", c.detector.classify_threshold);
     getStrings(d, "ignore_classes", c.detector.ignore_classes);
+    get(d, "backend", c.detector.backend);
+    get(d, "onnx_path", c.detector.onnx_path);
+    getStrings(d, "onnx_classes", c.detector.onnx_classes);
+    get(d, "keypoint_conf", c.detector.keypoint_conf);
+    get(d, "keypoint_nms", c.detector.keypoint_nms);
+    { int v = 640; get(d, "keypoint_input", v); c.detector.keypoint_input = v; }
 
     const auto p = fs["pose"];
     get(p, "optimize_yaw", c.pose.optimize_yaw);

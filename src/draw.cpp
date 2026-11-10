@@ -112,7 +112,7 @@ void drawOverlay(cv::Mat& img, const FrameObservations& obs, const FrameLog& log
             cv::line(img, a, b, chosen ? cv::Scalar(0, 0, 255) : cv::Scalar(255, 255, 0), chosen ? 3 : 2);
         }
         for (const auto& a : obs.armors) {
-            if (a.det.number != geom.id() && !geom.id().empty()) continue;
+            if (deviceId(a.det) != geom.id() && !geom.id().empty()) continue;
             cv::circle(img, map(a.position[0], a.position[1]), 3, {0, 255, 0}, -1);
         }
         text(img, "top view (1.2 m)", {roi.x + 5, roi.y + S - 8}, {220, 220, 220}, 0.4);

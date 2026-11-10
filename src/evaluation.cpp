@@ -142,12 +142,12 @@ bool ShotJudge::platesAt(double T, const std::string& id, std::vector<ArmorObser
     const auto& B = obs_[f1].armors;
     std::vector<bool> used_b(B.size(), false);
     for (const auto& a : A) {
-        if (!id.empty() && a.det.number != id) continue;
+        if (!id.empty() && deviceId(a.det) != id) continue;
         int best = -1;
         double best_d = 1e18;
         const double gate = 0.6 * cv::norm(a.det.corners[3] - a.det.corners[0]) + 3.0;
         for (int j = 0; j < static_cast<int>(B.size()); ++j) {
-            if (used_b[j] || B[j].det.number != a.det.number) continue;
+            if (used_b[j] || deviceId(B[j].det) != deviceId(a.det)) continue;
             const double d = cv::norm(B[j].det.center - a.det.center);
             if (d < gate && d < best_d) best_d = d, best = j;
         }
@@ -160,7 +160,7 @@ bool ShotJudge::platesAt(double T, const std::string& id, std::vector<ArmorObser
     }
     if (w >= 0.5f)
         for (int j = 0; j < static_cast<int>(B.size()); ++j)
-            if (!used_b[j] && (id.empty() || B[j].det.number == id)) out.push_back(B[j]);
+            if (!used_b[j] && (id.empty() || deviceId(B[j].det) == id)) out.push_back(B[j]);
     return true;
 }
 
@@ -302,7 +302,7 @@ EvalResult evaluate(const Config& cfg, const std::vector<FrameObservations>& obs
                 g_direct.step(c.yaw, c.pitch, dt);
                 const int idx = chooseInitialTarget(f.armors);
                 if (c.fire && onTarget(g_direct, c, f.armors[idx].det.type, scale))
-                    fireAndJudge(s_direct, judge, g_direct, c, f.armors[idx].det.number, f.frame,
+                    fireAndJudge(s_direct, judge, g_direct, c, deviceId(f.armors[idx].det), f.frame,
                                  cfg.aimer.latency, f.stamp, nullptr);
             }
         }
@@ -394,7 +394,7 @@ EvalResult evaluate(const Config& cfg, const std::vector<FrameObservations>& obs
                 const cv::Point2d st_px(f.armors[static_idx].det.center);
                 const double center_dir = std::atan2(xs[RobotTracker::YC], xs[RobotTracker::XC]);
                 for (const auto& a : fm.armors) {
-                    if (a.det.number != robot.id()) continue;
+                    if (deviceId(a.det) != robot.id()) continue;
                     const cv::Point2d target(a.det.center);
                     double best = 1e18;
                     for (int k = 0; k < robot.armorsNum(); ++k) {

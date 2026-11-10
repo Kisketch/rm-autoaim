@@ -115,7 +115,7 @@ void RobotTracker::init(const ArmorObservation& obs, double stamp) {
     for (int i = 0; i < N; ++i) P_(i, i) = p0[i] * p0[i];
     stamp_ = stamp;
     last_match_stamp_ = stamp;
-    id_ = obs.det.number;
+    id_ = deviceId(obs.det);
     armor_type = obs.det.type;
     state_ = TrackState::DETECTING;
     detect_count_ = 0;
@@ -267,7 +267,7 @@ void RobotTracker::update(const FrameObservations& frame) {
     bool target_seen = false;
     for (int i = 0; i < static_cast<int>(frame.armors.size()); ++i) {
         const auto& o = frame.armors[i];
-        if (o.det.number != id_) continue;
+        if (deviceId(o.det) != id_) continue;
         target_seen = true;
         const cv::Matx<double, 4, 4> R = measurementNoise(o);
         for (int k = 0; k < cfg_.armors_num; ++k) {
@@ -360,7 +360,7 @@ void PointTracker::init(const ArmorObservation& obs, double stamp) {
     P_(4, 4) = 0.05 * 0.05;
     P_(1, 1) = P_(3, 3) = P_(5, 5) = 1.0;
     stamp_ = last_match_ = stamp;
-    id_ = obs.det.number;
+    id_ = deviceId(obs.det);
     yaw_ = obs.yaw;
     armor_type = obs.det.type;
     active_ = true;
@@ -394,7 +394,7 @@ void PointTracker::update(const FrameObservations& frame) {
     double best_d = 1e18;
     for (int i = 0; i < static_cast<int>(frame.armors.size()); ++i) {
         const auto& o = frame.armors[i];
-        if (o.det.number != id_) continue;
+        if (deviceId(o.det) != id_) continue;
         const double d = cv::norm(o.position - position(x_));
         if (d < best_d) best_d = d, best = i;
     }

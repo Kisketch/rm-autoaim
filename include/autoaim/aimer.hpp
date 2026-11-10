@@ -25,6 +25,10 @@ struct AimCommand {
     bool fire = false;
     bool center_mode = false;
     double yaw = 0, pitch = 0;  // desired gimbal angles (rad)
+    // Rate of the commanded angles (rad/s), for gimbals that accept a
+    // velocity feedforward term next to the angle (B-01).  Filled by the
+    // aimers from successive commands; 0 when no previous command exists.
+    double yaw_rate = 0, pitch_rate = 0;
     cv::Vec3d aim_point{0, 0, 0};
     double t_fly = 0;
     double t_impact = 0;        // absolute time
@@ -52,6 +56,19 @@ private:
 
 bool onTarget(const GimbalSim& g, const AimCommand& cmd, ArmorType type, double scale);
 
+// Rate of successive aim commands by finite difference, yaw wrap-aware and
+// clamped to the gimbal's rate limit (a plate switch is a step: its raw
+// difference is huge, the clamp keeps the feedforward term physical).
+struct CommandRate {
+    void reset() { has_ = false; }
+    void update(double yaw, double pitch, double stamp, double max_rate, double& yaw_rate,
+                double& pitch_rate);
+
+private:
+    bool has_ = false;
+    double yaw_ = 0, pitch_ = 0, stamp_ = 0;
+};
+
 class RobotAimer {
 public:
     RobotAimer(const AimerConfig& cfg, const Ballistics& ballistics) : cfg_(cfg), ball_(ballistics) {}
@@ -64,6 +81,7 @@ private:
     const Ballistics& ball_;
     mutable int last_armor_ = -1;  // plate chosen last frame, for switch hysteresis
     mutable std::string last_id_;  // tracker id the hysteresis state belongs to
+    mutable CommandRate rate_;     // B-01 feedforward state, same lifetime as last_id_
 };
 
 class PointAimer {
@@ -74,6 +92,7 @@ public:
 private:
     AimerConfig cfg_;
     const Ballistics& ball_;
+    mutable CommandRate rate_;
 };
 
 class DirectAimer {

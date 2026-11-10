@@ -39,6 +39,21 @@ bool onTarget(const GimbalSim& g, const AimCommand& cmd, ArmorType type, double 
     return std::abs(wrapAngle(g.yaw - cmd.yaw)) < tol_yaw && std::abs(g.pitch - cmd.pitch) < tol_pitch;
 }
 
+void CommandRate::update(double yaw, double pitch, double stamp, double max_rate, double& yaw_rate,
+                         double& pitch_rate) {
+    yaw_rate = 0;
+    pitch_rate = 0;
+    if (has_ && stamp > stamp_) {
+        const double dt = stamp - stamp_;
+        yaw_rate = std::clamp(wrapAngle(yaw - yaw_) / dt, -max_rate, max_rate);
+        pitch_rate = std::clamp((pitch - pitch_) / dt, -max_rate, max_rate);
+    }
+    yaw_ = yaw;
+    pitch_ = pitch;
+    stamp_ = stamp;
+    has_ = true;
+}
+
 namespace {
 
 // Fill yaw/pitch/t_fly for a world point.  Returns false if unreachable.
@@ -97,11 +112,13 @@ AimCommand RobotAimer::aim(const RobotTracker& tracker, double now) const {
     if (!tracker.active()) {
         last_armor_ = -1;
         last_id_.clear();
+        rate_.reset();
         return cmd;
     }
     if (last_id_ != tracker.id()) {  // new target: hysteresis state is meaningless
         last_armor_ = -1;
         last_id_ = tracker.id();
+        rate_.reset();
     }
     const int previous = last_armor_;
     const double t0 = now + cfg_.latency;
@@ -162,6 +179,7 @@ AimCommand RobotAimer::aim(const RobotTracker& tracker, double now) const {
     } else {
         cmd.fire = tracking && warmed && confident && std::abs(cmd.facing_deg) < cfg_.max_fire_facing_deg;
     }
+    rate_.update(cmd.yaw, cmd.pitch, now, cfg_.gimbal_max_rate, cmd.yaw_rate, cmd.pitch_rate);
     return cmd;
 }
 
@@ -169,7 +187,10 @@ AimCommand RobotAimer::aim(const RobotTracker& tracker, double now) const {
 
 AimCommand PointAimer::aim(const PointTracker& tracker, double now) const {
     AimCommand cmd;
-    if (!tracker.active()) return cmd;
+    if (!tracker.active()) {
+        rate_.reset();
+        return cmd;
+    }
     const double t0 = now + cfg_.latency;
     double t_fly = flightGuess(ball_, tracker.position(tracker.predict(t0)));
     for (int it = 0; it < 4; ++it) {
@@ -182,6 +203,7 @@ AimCommand PointAimer::aim(const PointTracker& tracker, double now) const {
     cmd.valid = true;
     cmd.t_impact = t0 + cmd.t_fly;
     cmd.fire = true;
+    rate_.update(cmd.yaw, cmd.pitch, now, cfg_.gimbal_max_rate, cmd.yaw_rate, cmd.pitch_rate);
     return cmd;
 }
 

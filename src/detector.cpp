@@ -115,7 +115,9 @@ void NumberClassifier::classify(const cv::Mat& bgr, std::vector<ArmorDetection>&
 
 Detector::Detector(const DetectorConfig& cfg)
     : cfg_(cfg),
-      classifier_(cfg.model_path, cfg.label_path, cfg.classify_threshold, cfg.ignore_classes) {}
+      classifier_(cfg.model_path, cfg.label_path, cfg.classify_threshold, cfg.ignore_classes) {
+    if (cfg_.backend == "onnx") keypoint_ = std::make_unique<KeypointDetector>(cfg_);
+}
 
 std::vector<Light> Detector::findLights(const cv::Mat& bgr, cv::Mat& mask) const {
     std::vector<cv::Mat> ch;
@@ -207,6 +209,7 @@ std::vector<ArmorDetection> Detector::matchLights(const std::vector<Light>& ligh
             ArmorDetection d;
             d.left = *l;
             d.right = *r;
+            d.color = l->color;
             const float center_ratio = static_cast<float>(cv::norm(r->center - l->center)) / avg;
             d.type = center_ratio > cfg_.large_plate_ratio ? ArmorType::LARGE : ArmorType::SMALL;
             const float score = angle_diff / cfg_.max_pair_angle_diff_deg +
@@ -314,6 +317,11 @@ void Detector::refineCorners(const cv::Mat& gray, Light& light) const {
 }
 
 std::vector<ArmorDetection> Detector::detect(const cv::Mat& bgr, DetectorDebug* debug) {
+    if (usingOnnx()) {
+        auto armors = keypoint_->detect(bgr);
+        if (debug) debug->pairs_before_classify = static_cast<int>(armors.size());
+        return armors;
+    }
     cv::Mat mask;
     std::vector<Light> lights = findLights(bgr, mask);
     std::vector<ArmorDetection> armors = matchLights(lights);

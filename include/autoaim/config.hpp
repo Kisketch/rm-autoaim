@@ -46,6 +46,16 @@ struct DetectorConfig {
     std::string model_path, label_path;
     double classify_threshold = 0.7;
     std::vector<std::string> ignore_classes = {"negative"};
+    // Keypoint (YOLO-pose) backend, docs/yolo_keypoints_plan.md (B-02).
+    // "traditional" (default) is the light-bar pipeline; "onnx" runs the
+    // keypoint model and falls back to traditional if the model cannot be
+    // loaded, so a missing file never kills the robot app.
+    std::string backend = "traditional";  // "traditional" | "onnx"
+    std::string onnx_path;
+    std::vector<std::string> onnx_classes = {"1", "2", "3", "4", "5", "outpost", "guard", "base"};
+    double keypoint_conf = 0.25;
+    double keypoint_nms = 0.45;
+    int keypoint_input = 640;
 };
 
 struct PoseConfig {
