@@ -1,3 +1,5 @@
+> **⚠️ 本仓已于 2026-11-10 合并入单仓 [Kisketch/rm-vision](https://github.com/Kisketch/rm-vision) 并归档（只读）。** 新开发请去 rm-vision：共用核心在 `core/`、步兵程序入口不变。合并决策与回归证据见 rm-vision 的 `docs/monorepo_migration.md`。本仓历史与冻结基线保留在此备查。
+
 # RM Auto-Aim (视觉自瞄) — detection → pose → whole-robot EKF → ballistics → fire
 
 A complete, self-contained RoboMaster armor auto-aim pipeline in C++17 + OpenCV
