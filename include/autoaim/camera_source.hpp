@@ -82,6 +82,13 @@ struct MvsConfig {
     double exposure_us = 1500.0;
     double frame_rate = 165.0;  // matches the reality params used by SMBU pb2025
     bool hardware_trigger = false;  // true: external trigger starts exposure
+    // Subtracted from every stamp.  The ClockAligner offset is the MEDIAN
+    // receipt delay (exposure start -> host receipt), so aligned stamps are
+    // late by readout + transfer + host latency.  That is not harmless: the
+    // attitude is looked up at this stamp, so while the gimbal turns at w the
+    // measurement is rotated by w * delay.  Measure it with DelayCalibrator
+    // (delay_calibration.hpp: static plate, gimbal sweep) and put it here.
+    double stamp_offset_us = 0.0;
 };
 
 class MvsSource : public CameraSource {

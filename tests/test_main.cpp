@@ -2,10 +2,12 @@
 #include <cmath>
 #include <cstdio>
 #include <random>
+#include <utility>
 
 #include "autoaim/aimer.hpp"
 #include "autoaim/ballistics.hpp"
 #include "autoaim/config.hpp"
+#include "autoaim/delay_calibration.hpp"
 #include "autoaim/detector.hpp"
 #include "autoaim/keypoint_detector.hpp"
 #include "autoaim/pose.hpp"
@@ -530,6 +532,70 @@ static void testWindowedDetection() {
     CHECK(overlap.size() == 1, "overlapping windows dedupe: %zu", overlap.size());
 }
 
+// Bounded extrapolation past the newest sample (ported from the sentry repo).
+static void testPoseBufferExtrapolation() {
+    PoseBuffer strict(64, 0.05), loose(64, 0.05, 0.010);
+    for (int i = 0; i < 10; ++i) {
+        const double t = i * 0.005;  // 200 Hz, yaw rate 2 rad/s
+        strict.push({t, quatFromYawPitchRoll(2.0 * t, 0.1, 0.0)});
+        loose.push({t, quatFromYawPitchRoll(2.0 * t, 0.1, 0.0)});
+    }
+    Quat q;
+    const double newest = 9 * 0.005;
+    CHECK(!strict.query(newest + 0.004, q), "strict buffer must not extrapolate");
+    CHECK(loose.query(newest + 0.004, q), "extrapolation within the limit");
+    CHECK(quatAngleBetween(q, quatFromYawPitchRoll(2.0 * (newest + 0.004), 0.1, 0.0)) < 1e-6,
+          "extrapolated attitude");
+    CHECK(!loose.query(newest + 0.011, q), "beyond max_extrapolation must fail");
+}
+
+// Camera stamps 12 ms late relative to the attitude stream, static plate,
+// sweeping gimbal: DelayCalibrator must recover the 12 ms (MvsConfig::
+// stamp_offset_us), and refuse when the gimbal does not move.
+static void testDelayCalibration() {
+    const double true_delay = 0.012;
+    const cv::Vec3d plate(5.0, 0.3, 0.1);
+    for (double amp : {0.4, 0.0}) {
+        auto yp = [amp](double t) {
+            return std::pair<double, double>(amp * std::sin(2 * kPi * 0.8 * t),
+                                             0.25 * amp * std::sin(2 * kPi * 0.5 * t));
+        };
+        PoseBuffer att(4096, 0.05);
+        for (int i = 0; i < 2400; ++i) {
+            const double t = i * 0.005;
+            const auto [y, p] = yp(t);
+            att.push({t, quatFromYawPitchRoll(y, -p, 0.0)});
+        }
+        const auto lookup = [&att](double t, cv::Matx33d& R) {
+            Quat q;
+            if (!att.query(t, q)) return false;
+            R = quatToMat(q);
+            return true;
+        };
+        DelayCalibrator cal(-0.01, 0.05, 0.0005);
+        std::mt19937 rng(7);
+        std::normal_distribution<double> noise(0.0, 0.01);
+        for (int n = 0; n < 250; ++n) {
+            const double t_exp = 0.5 + n * 0.04;
+            const auto [y, p] = yp(t_exp);
+            const cv::Vec3d pg = quatToMat(quatFromYawPitchRoll(y, -p, 0.0)).t() * plate;
+            cal.add(t_exp + true_delay, pg + cv::Vec3d(noise(rng), noise(rng), noise(rng)));
+            cal.resolve(t_exp - 0.1, lookup);
+        }
+        cal.resolve(1e9, lookup);
+        const DelayEstimate e = cal.estimate();
+        if (amp > 0) {
+            CHECK(e.ok, "delay estimate: %s", e.reason);
+            CHECK(std::abs(e.delay - true_delay) < 0.001, "delay %.2f ms, want 12", e.delay * 1e3);
+            CHECK(e.spread < 0.5 * e.spread_at_zero, "scatter %.3f -> %.3f m", e.spread_at_zero, e.spread);
+            std::printf("delay calibration: est %.2f ms (true 12), plate scatter %.1f -> %.1f cm\n",
+                        e.delay * 1e3, e.spread_at_zero * 100, e.spread * 100);
+        } else {
+            CHECK(!e.ok, "no excitation must give no estimate");
+        }
+    }
+}
+
 int main() {
     testDetectorDegenerateInputs();
     testWindowedDetection();
@@ -543,6 +609,8 @@ int main() {
     testKeypointDetector();
     testPoseBuffer();
     testClockAligner();
+    testPoseBufferExtrapolation();
+    testDelayCalibration();
     if (failures == 0) std::printf("ALL TESTS PASSED\n");
     return failures == 0 ? 0 : 1;
 }
