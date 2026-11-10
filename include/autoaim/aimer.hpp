@@ -78,7 +78,7 @@ private:
     int selectArmor(const RobotTracker& t, const RobotTracker::Vec& x, int previous,
                     double& facing) const;
     AimerConfig cfg_;
-    const Ballistics& ball_;
+    Ballistics ball_;  // by value: a reference member dangles if the caller passes a temporary
     mutable int last_armor_ = -1;  // plate chosen last frame, for switch hysteresis
     mutable std::string last_id_;  // tracker id the hysteresis state belongs to
     mutable CommandRate rate_;     // B-01 feedforward state, same lifetime as last_id_
@@ -91,7 +91,7 @@ public:
 
 private:
     AimerConfig cfg_;
-    const Ballistics& ball_;
+    Ballistics ball_;  // by value: a reference member dangles if the caller passes a temporary
     mutable CommandRate rate_;
 };
 
@@ -102,7 +102,7 @@ public:
 
 private:
     AimerConfig cfg_;
-    const Ballistics& ball_;
+    Ballistics ball_;  // by value: a reference member dangles if the caller passes a temporary
 };
 
 }  // namespace autoaim

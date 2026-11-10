@@ -72,6 +72,14 @@ PoseBuffer::PoseBuffer(std::size_t capacity, double max_gap, double max_extrapol
       max_extrap_(std::max(0.0, max_extrapolation)) {}
 
 void PoseBuffer::push(GimbalPoseSample s) {
+    // A non-finite sample (e.g. a corrupt serial frame decoding to NaN
+    // floats) must never enter the buffer: NaN comparisons would corrupt
+    // the time ordering and poison every later interpolation.  Dropping it
+    // makes the affected frames miss their query and get skipped, which is
+    // the designed degradation.
+    if (!std::isfinite(s.stamp) || !std::isfinite(s.quat[0]) || !std::isfinite(s.quat[1]) ||
+        !std::isfinite(s.quat[2]) || !std::isfinite(s.quat[3]))
+        return;
     s.quat = normalizeQuat(s.quat);
     std::lock_guard<std::mutex> lock(mu_);
     // Serial samples normally arrive in order; only walk back over the few

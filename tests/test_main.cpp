@@ -549,6 +549,25 @@ static void testPoseBufferExtrapolation() {
     CHECK(!loose.query(newest + 0.011, q), "beyond max_extrapolation must fail");
 }
 
+static void testPoseBufferNonFinite() {
+    // A corrupt serial frame can decode to NaN floats; such samples must be
+    // dropped at push(), never stored (full-audit 2026-11 finding).
+    PoseBuffer buf(64, 0.05, 0.010);
+    const double nan = std::nan("");
+    buf.push({0.000, quatFromYawPitchRoll(0.0, 0, 0)});
+    buf.push({0.005, quatFromYawPitchRoll(0.01, 0, 0)});
+    buf.push({nan, quatFromYawPitchRoll(0.02, 0, 0)});
+    buf.push({0.010, {nan, 0, 0, 0}});
+    buf.push({0.010, quatFromYawPitchRoll(0.02, 0, 0)});
+    CHECK(buf.size() == 3, "non-finite samples dropped: %zu", buf.size());
+    Quat q;
+    CHECK(buf.query(0.0075, q), "query across the dropped samples");
+    CHECK(std::isfinite(q[0]) && std::isfinite(q[1]) && std::isfinite(q[2]) && std::isfinite(q[3]),
+          "queried pose stays finite");
+    CHECK(buf.query(0.012, q), "extrapolation past a dropped NaN sample");
+    CHECK(std::isfinite(q[0]), "extrapolated pose stays finite");
+}
+
 // Camera stamps 12 ms late relative to the attitude stream, static plate,
 // sweeping gimbal: DelayCalibrator must recover the 12 ms (MvsConfig::
 // stamp_offset_us), and refuse when the gimbal does not move.
@@ -610,6 +629,7 @@ int main() {
     testPoseBuffer();
     testClockAligner();
     testPoseBufferExtrapolation();
+    testPoseBufferNonFinite();
     testDelayCalibration();
     if (failures == 0) std::printf("ALL TESTS PASSED\n");
     return failures == 0 ? 0 : 1;

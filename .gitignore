@@ -7,3 +7,6 @@ runs/
 __pycache__/
 *.pyc
 docs/detections/*.avi
+
+# local tooling session state
+.omo/
