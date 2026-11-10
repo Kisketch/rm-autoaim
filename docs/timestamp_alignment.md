@@ -16,8 +16,12 @@
 1. 相机侧：`MvsSource` 取帧时读取相机设备时间戳（`nTimeStampHigh/Low` ÷
    `TimestampTickFrequency`），每帧用 `ClockAligner` 与主机 `steady_clock`
    配对更新偏移，曝光中心 = 设备曝光起始 + `exposure_us/2`，换算到主机时钟。
-   恒定传输延迟会折进偏移与 `aimer.latency` 的实测值里（G-02 第 3 步测的
-   正是端到端总量），对齐预算约束的是**抖动**，不是这个恒定项。
+   恒定传输延迟会折进偏移。**更正（2026-11）**：这一项对预测时域无害
+   （`aimer.latency` 实测的是端到端总量），但对**姿态查询**有害——相机戳比
+   姿态流晚 D，测量就被旋转 云台角速度 × D（云台扫动、换板时最大，例如
+   换板 6 rad/s × 10 ms = 3.4°，5 m 处约 30 cm）。须用
+   `DelayCalibrator`（`delay_calibration.hpp`，静止装甲板 + 扫云台）实测，
+   写入 `MvsConfig::stamp_offset_us`。
 2. 姿态侧：串口接收线程把每帧 IMU 姿态转成四元数（下位机给欧拉角时用
    `quatFromYawPitchRoll`），时间戳经同一个 `ClockAligner` 思路换算到主机
    时钟后 `PoseBuffer::push`。

@@ -142,7 +142,7 @@ AimCommand RobotAimer::aim(const RobotTracker& tracker, double now) const {
             // aim along the centre direction at the distance of the front plate
             const cv::Vec3d c(x[RobotTracker::XC], x[RobotTracker::YC], 0);
             const double r = 0.5 * (x[RobotTracker::R1] + x[RobotTracker::R2]);
-            const double dc = std::hypot(c[0], c[1]);
+            const double dc = std::max(1e-6, std::hypot(c[0], c[1]));  // no 0/0 at the gimbal origin
             const double s = std::max(0.3, dc - r);
             target = cv::Vec3d(c[0] / dc * s, c[1] / dc * s, tracker.armorPosition(x, k)[2]);
         } else {

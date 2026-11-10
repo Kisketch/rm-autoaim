@@ -19,3 +19,16 @@
 
 验证：本仓测试全过（含弹道金标）、仿真表无退步、真实视频 N0 回归与冻结基线一致
 （见提交说明）。
+
+## 第二轮（2026-11-10）
+
+- **更正**：PoseBuffer 有界外推并非"本仓无对应物"——`PoseBuffer` 就在本仓（`MvsSource`
+  时间戳链路的另一半）。已从哨兵仓同步，默认 `max_extrapolation = 0`，行为不变。
+- **相机—姿态时间差**：`ClockAligner` 把相机的中位传输延迟折进偏移，原注释称"无害"。
+  对预测时域确实无害，但姿态是在这个偏晚的戳上查的，云台转动时观测被旋转 ω·D
+  （换板 6 rad/s × 10 ms ≈ 3.4°）。新增 `DelayCalibrator`（`delay_calibration.hpp`，
+  静止装甲板 + 扫云台，散布最小的偏移即所求）与 `MvsConfig::stamp_offset_us`。
+  合成数据：真值 12 ms → 估计 11.98 ms，板子散布 8.8 → 1.8 cm（`testDelayCalibration`）。
+- 中心模式 `dc` 为 0 时的 0/0 保护。
+
+详见哨兵仓 `docs/review_2026-11_round2.md`。

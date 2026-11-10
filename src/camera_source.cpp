@@ -168,7 +168,8 @@ bool MvsSource::grab(SourceFrame& out) {
     impl_->aligner.addPair(device_start, steadySeconds());
     // Device stamp = start of exposure; the pose that belongs to the image
     // is the one at its centre.
-    out.exposure_stamp = impl_->aligner.toLocal(device_start) + cfg_.exposure_us * 0.5e-6;
+    out.exposure_stamp =
+        impl_->aligner.toLocal(device_start) + cfg_.exposure_us * 0.5e-6 - cfg_.stamp_offset_us * 1e-6;
     out.index = index_++;
     out.hw_stamp = true;
 

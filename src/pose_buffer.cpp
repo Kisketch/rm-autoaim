@@ -67,8 +67,9 @@ cv::Matx33d quatToMat(const Quat& q) {
             2 * (x * z - y * w),     2 * (y * z + x * w),     1 - 2 * (x * x + y * y)};
 }
 
-PoseBuffer::PoseBuffer(std::size_t capacity, double max_gap)
-    : capacity_(capacity == 0 ? 1 : capacity), max_gap_(max_gap) {}
+PoseBuffer::PoseBuffer(std::size_t capacity, double max_gap, double max_extrapolation)
+    : capacity_(capacity == 0 ? 1 : capacity), max_gap_(max_gap),
+      max_extrap_(std::max(0.0, max_extrapolation)) {}
 
 void PoseBuffer::push(GimbalPoseSample s) {
     s.quat = normalizeQuat(s.quat);
@@ -92,7 +93,18 @@ bool PoseBuffer::query(double stamp, Quat& out) const {
 
 bool PoseBuffer::query(double stamp, Quat& out, double& gap) const {
     std::lock_guard<std::mutex> lock(mu_);
-    if (buf_.empty() || stamp < buf_.front().stamp || stamp > buf_.back().stamp) return false;
+    if (buf_.empty() || !std::isfinite(stamp) || stamp < buf_.front().stamp) return false;
+    if (stamp > buf_.back().stamp) {
+        // Short extrapolation past the newest sample (SLERP with t > 1 follows
+        // the same great circle at the same angular rate).
+        if (buf_.size() < 2 || stamp - buf_.back().stamp > max_extrap_) return false;
+        const GimbalPoseSample& s1 = buf_.back();
+        const GimbalPoseSample& s0 = buf_[buf_.size() - 2];
+        gap = s1.stamp - s0.stamp;
+        if (gap <= 0 || gap > max_gap_) return false;
+        out = normalizeQuat(slerpQuat(s0.quat, s1.quat, (stamp - s0.stamp) / gap));
+        return true;
+    }
     // First sample with stamp >= query stamp.
     std::size_t lo = 0, hi = buf_.size();
     while (lo < hi) {
