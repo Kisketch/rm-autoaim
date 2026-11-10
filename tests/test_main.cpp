@@ -6,6 +6,7 @@
 #include "autoaim/ballistics.hpp"
 #include "autoaim/config.hpp"
 #include "autoaim/pose.hpp"
+#include "autoaim/pose_buffer.hpp"
 #include "autoaim/tracker.hpp"
 
 using namespace autoaim;
@@ -124,10 +125,76 @@ static void testTracker() {
                 x[RobotTracker::R1], x[RobotTracker::R2], r);
 }
 
+static void testPoseBuffer() {
+    // Gimbal spinning at 3 rad/s (the G-02 reference case), pose samples at
+    // 200 Hz like a serial IMU stream, frames queried at in-between times.
+    const double w = 3.0;
+    PoseBuffer buf(512, 0.05);
+    for (int n = 0; n <= 440; ++n) {  // cover the last queried frame stamp (2.063 s)
+        const double t = n * 0.005;
+        buf.push({t, quatFromYawPitchRoll(w * t, 0.0, 0.0)});
+    }
+    double max_aligned = 0, max_latest = 0;
+    for (int n = 0; n < 50; ++n) {
+        const double t = 0.1 + n * 0.04 + 0.003;  // 25 fps frames, off-sample phase
+        Quat q;
+        CHECK(buf.query(t, q), "pose query at %f", t);
+        max_aligned = std::max(max_aligned, quatAngleBetween(q, quatFromYawPitchRoll(w * t, 0, 0)));
+        // The pre-G-02 behaviour: newest sample not newer than the frame.
+        const double t_latest = std::floor(t / 0.005) * 0.005;
+        max_latest = std::max(max_latest, quatAngleBetween(quatFromYawPitchRoll(w * t_latest, 0, 0),
+                                                           quatFromYawPitchRoll(w * t, 0, 0)));
+    }
+    // SLERP between exact samples of a constant-rate rotation is exact; the
+    // G-02 alignment budget is 0.3 ms == 0.0009 rad at 3 rad/s.
+    CHECK(max_aligned < 9e-4, "aligned error %g rad exceeds the G-02 budget", max_aligned);
+    CHECK(max_latest > 10 * max_aligned, "latest-sample error should dwarf aligned: %g vs %g", max_latest,
+          max_aligned);
+    std::printf("pose buffer: aligned err %.2e rad, latest-sample err %.2e rad at 3 rad/s\n", max_aligned,
+                max_latest);
+
+    Quat q;
+    CHECK(!buf.query(-0.1, q), "query before coverage must fail");
+    CHECK(!buf.query(2.3, q), "query after coverage must fail");
+
+    PoseBuffer gappy(16, 0.02);
+    gappy.push({0.0, quatFromYawPitchRoll(0, 0, 0)});
+    gappy.push({0.1, quatFromYawPitchRoll(0.3, 0, 0)});
+    double gap = 0;
+    CHECK(!gappy.query(0.05, q, gap), "query across a dropped-frame gap must fail");
+    CHECK(std::abs(gap - 0.1) < 1e-12, "reported gap %f", gap);
+
+    PoseBuffer ooo(16, 0.05);  // out-of-order arrival still queries correctly
+    ooo.push({0.010, quatFromYawPitchRoll(0.03, 0, 0)});
+    ooo.push({0.000, quatFromYawPitchRoll(0.00, 0, 0)});
+    ooo.push({0.005, quatFromYawPitchRoll(0.015, 0, 0)});
+    CHECK(ooo.query(0.0075, q), "out-of-order query");
+    CHECK(quatAngleBetween(q, quatFromYawPitchRoll(0.0225, 0, 0)) < 1e-9, "out-of-order slerp");
+}
+
+static void testClockAligner() {
+    ClockAligner al(64);
+    std::mt19937 rng(2);
+    std::normal_distribution<double> jitter(0, 0.001);
+    const double true_offset = 12.345;
+    for (int n = 0; n < 64; ++n) {
+        const double remote = n * 0.005;
+        double local = remote + true_offset + jitter(rng);
+        if (n % 17 == 5) local += 0.05;  // transfer outlier the median must reject
+        al.addPair(remote, local);
+    }
+    CHECK(al.ready(), "aligner ready");
+    CHECK(std::abs(al.offset() - true_offset) < 0.002, "offset %f vs %f", al.offset(), true_offset);
+    CHECK(std::abs(al.toLocal(100.0) - (100.0 + true_offset)) < 0.002, "toLocal");
+    std::printf("clock aligner: offset error %.2e s\n", std::abs(al.offset() - true_offset));
+}
+
 int main() {
     testBallistics();
     testPose();
     testTracker();
+    testPoseBuffer();
+    testClockAligner();
     if (failures == 0) std::printf("ALL TESTS PASSED\n");
     return failures == 0 ? 0 : 1;
 }
