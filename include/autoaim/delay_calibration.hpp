@@ -9,15 +9,15 @@
 // 6 rad/s plate switch = 3.4 deg, ~30 cm at 5 m.  aimer.latency cannot absorb
 // it: it is not a prediction horizon, it is a wrong rotation, and it is
 // largest exactly when the gimbal slews.  ClockAligner (pose_buffer.hpp) folds
-// the camera's median transfer delay into its offset, so MvsSource stamps are
-// late by exactly such a D_cam; MvsConfig::stamp_offset_us takes the result.
+// the camera's median transfer delay into its offset, so camera stamps are
+// late by exactly such a D_cam.
 //
 // How: point at a STATIC plate and sweep the gimbal.  For each candidate
 // offset d the plate's world position is R_wg(stamp - d) * p_gimbal; the right
 // d makes those positions stand still.  The estimate is the d that minimises
-// their spread; feed it back as MvsConfig::stamp_offset_us here, or as
-// sentry_robot --exposure-offset-ms in rm-sentry-integration (added to
-// whatever offset the recording already used).
+// their spread; feed it back as the camera stamp offset (rm-autoaim:
+// MvsConfig::stamp_offset_us; rm-sentry-integration: sentry_robot
+// --exposure-offset-ms), added to whatever offset the recording already used.
 #pragma once
 
 #include <opencv2/core.hpp>
