@@ -79,6 +79,13 @@ RobotTracker::Vec RobotTracker::predict(double t) const {
         x[XC] += x[VXC] * b;
         x[YC] += x[VYC] * b;
         x[ZC] += x[VZC] * b;
+        // The velocity decays too (same F as transition()).  Without this the
+        // extrapolated state carried the undamped velocity, so re-extrapolating
+        // a predicted state overshot by v*(1-a)*b.  (Ported from the sentry
+        // review branch, docs/review_2026-11.md #9.)
+        x[VXC] *= a;
+        x[VYC] *= a;
+        x[VZC] *= a;
     } else {
         x[XC] += x[VXC] * dt;
         x[YC] += x[VYC] * dt;

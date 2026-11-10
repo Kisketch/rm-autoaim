@@ -177,8 +177,13 @@ struct Config {
     AimerConfig aimer;
     EvalConfig eval;
 
-    // Load from YAML; keys that are missing keep their defaults.
+    // Load from YAML; keys that are missing keep their defaults.  The result
+    // is validated (see validate()); an inconsistent file throws.
     static Config load(const std::string& path);
+    // Sanity checks that would otherwise surface as NaNs, divisions by zero or
+    // silently wrong geometry deep in the pipeline.  Returns one message per
+    // problem; empty means valid.
+    std::vector<std::string> validate() const;
     void save(const std::string& path) const;
 };
 

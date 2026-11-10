@@ -1,5 +1,8 @@
 ﻿#include "autoaim/config.hpp"
 
+#include <algorithm>
+#include <cmath>
+
 #include <stdexcept>
 
 namespace autoaim {
@@ -143,7 +146,67 @@ Config Config::load(const std::string& path) {
     const auto e = fs["eval"];
     get(e, "fps", c.eval.fps);
     getDoubles(e, "horizons", c.eval.horizons);
+    const std::vector<std::string> problems = c.validate();
+    if (!problems.empty()) {
+        std::string msg = "invalid config " + path + ":";
+        for (const auto& p : problems) msg += "\n  - " + p;
+        throw std::invalid_argument(msg);
+    }
     return c;
+}
+
+// Ported from the sentry review branch (docs/review_2026-11.md Â§4.9),
+// adapted: this repo has no TargetConfig; per-class ballistic fields added.
+std::vector<std::string> Config::validate() const {
+    std::vector<std::string> e;
+    auto need = [&e](bool ok, const std::string& what) {
+        if (!ok) e.push_back(what);
+    };
+    need(camera.fx > 0 && camera.fy > 0, "camera.fx/fy must be > 0");
+    need(camera.dist.size() <= 14, "camera.dist has more than 14 coefficients");
+    need(camera.R_cam2gimbal.empty() || camera.R_cam2gimbal.size() == 9,
+         "camera.R_cam2gimbal must be empty or have 9 values (row-major)");
+    if (camera.R_cam2gimbal.size() == 9) {
+        // must be a proper rotation: R R^T = I, det = +1
+        const cv::Matx33d R(camera.R_cam2gimbal.data());
+        const cv::Matx33d D = R * R.t() - cv::Matx33d::eye();
+        double err = 0;
+        for (int i = 0; i < 9; ++i) err = std::max(err, std::abs(D.val[i]));
+        const double det = R(0, 0) * (R(1, 1) * R(2, 2) - R(1, 2) * R(2, 1)) -
+                           R(0, 1) * (R(1, 0) * R(2, 2) - R(1, 2) * R(2, 0)) +
+                           R(0, 2) * (R(1, 0) * R(2, 1) - R(1, 1) * R(2, 0));
+        need(err < 1e-3 && det > 0, "camera.R_cam2gimbal is not a rotation matrix (orthonormal, det +1)");
+    }
+    need(camera.t_cam2gimbal.empty() || camera.t_cam2gimbal.size() == 3,
+         "camera.t_cam2gimbal must be empty or have 3 values (metres)");
+    need(detector.channel_diff_threshold >= 0 && detector.channel_diff_threshold < 255,
+         "detector.channel_diff_threshold must be in [0, 255)");
+    need(detector.classify_threshold >= 0 && detector.classify_threshold <= 1,
+         "detector.classify_threshold must be in [0, 1]");
+    need(tracker.armors_num >= 2 && tracker.armors_num <= 4, "tracker.armors_num must be 2, 3 or 4");
+    need(tracker.min_radius > 0 && tracker.min_radius <= tracker.max_radius,
+         "tracker.min_radius must be > 0 and <= max_radius");
+    need(tracker.init_radius >= tracker.min_radius && tracker.init_radius <= tracker.max_radius,
+         "tracker.init_radius must lie in [min_radius, max_radius]");
+    need(tracker.tracking_thres >= 1, "tracker.tracking_thres must be >= 1");
+    need(tracker.lost_time_thres > 0, "tracker.lost_time_thres must be > 0");
+    need(tracker.singer_tau >= 0, "tracker.singer_tau must be >= 0 (0 = constant velocity)");
+    need(tracker.nis_ema_alpha >= 0 && tracker.nis_ema_alpha <= 1, "tracker.nis_ema_alpha must be in [0, 1]");
+    need(tracker.pixel_noise > 0 && tracker.r_yaw > 0, "tracker.pixel_noise and r_yaw must be > 0");
+    need(tracker.q_xyz >= 0 && tracker.q_yaw >= 0 && tracker.q_r >= 0 && tracker.q_dz >= 0,
+         "tracker process noises must be >= 0");
+    need(ballistic.bullet_speed > 0, "ballistic.bullet_speed must be > 0");
+    need(ballistic.gravity >= 0 && ballistic.drag_k >= 0, "ballistic.gravity and drag_k must be >= 0");
+    need(aimer.latency >= 0 && aimer.latency < 1.0, "aimer.latency must be in [0, 1) s");
+    need(aimer.gimbal_tau > 0 && aimer.gimbal_max_rate > 0, "aimer.gimbal_tau and gimbal_max_rate must be > 0");
+    need(aimer.max_fire_facing_deg >= 0 && aimer.max_fire_facing_deg <= 90,
+         "aimer.max_fire_facing_deg must be in [0, 90]");
+    need(ballistic.bullet_mm == 17 || ballistic.bullet_mm == 42,
+         "ballistic.bullet_mm must be 17 or 42");
+    need(ballistic.bullet_speed_42 > 0 && ballistic.drag_k_42 >= 0,
+         "ballistic.bullet_speed_42 must be > 0 and drag_k_42 >= 0");
+    need(eval.fps > 0, "eval.fps must be > 0");
+    return e;
 }
 
 bool setParam(Config& c, const std::string& key, double v) {
