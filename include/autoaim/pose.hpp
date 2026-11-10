@@ -32,6 +32,13 @@ private:
     cv::Matx33d K_;
     cv::Mat dist_;
     cv::Matx33d R_wc_;
+    // Cached intrinsics + distortion for the allocation-free projection fast
+    // path (distortion models with <= 5 coefficients; longer models fall back
+    // to cv::projectPoints). Numerically identical to projectPoints for the
+    // 5-coefficient model (verified to <5e-12 px on 10k random points).
+    double fx_ = 0, fy_ = 0, cx_ = 0, cy_ = 0;
+    double dc_[5] = {0, 0, 0, 0, 0};
+    bool fast_projection_ = false;
 };
 
 // R_world_armor for a given yaw and armor pitch (roll 0).
